@@ -1,0 +1,53 @@
+{
+  "name": "highlightjs-carve",
+  "version": "0.1.0",
+  "description": "Carve markup language definition for highlight.js",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./carve.js": "./src/languages/carve.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "sync": "node scripts/sync.mjs",
+    "test": "node test/registration-test.mjs && node test/drift-test.mjs"
+  },
+  "keywords": [
+    "carve",
+    "crv",
+    "highlight.js",
+    "highlightjs",
+    "hljs",
+    "syntax",
+    "syntax-highlighting",
+    "markup",
+    "markup-language"
+  ],
+  "author": "markup-carve",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/markup-carve/highlightjs-carve.git"
+  },
+  "bugs": {
+    "url": "https://github.com/markup-carve/highlightjs-carve/issues"
+  },
+  "homepage": "https://markup-carve.github.io/carve/",
+  "peerDependencies": {
+    "highlight.js": "^11"
+  },
+  "devDependencies": {
+    "@markup-carve/carve-grammars": "^0.1.4",
+    "highlight.js": "^11.11.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
