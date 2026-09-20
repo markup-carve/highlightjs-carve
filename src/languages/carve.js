@@ -1,6 +1,6 @@
 // GENERATED FILE - DO NOT EDIT.
 //
-// Vendored verbatim from @markup-carve/carve-grammars@0.1.5
+// Vendored verbatim from @markup-carve/carve-grammars@0.1.8
 // (highlightjs/carve.js) by scripts/sync.mjs. Edit the definition there,
 // release carve-grammars, then run: npm run sync
 /**
@@ -157,7 +157,7 @@
      * @returns {object} the mode's `begin`/`end` pair, so the closer used by
      *   the guard and the closer used by the mode cannot drift apart.
      */
-    const paired = (opener, closer) => {
+    const paired = (opener, closer, { escapeAware = false, flanked = false } = {}) => {
         // The guard used to be written `(?:[^\n]|\n(?!\s*\n))*?` - unbounded,
         // lazy, and free to cross newlines. Proving there is NO closer therefore
         // cost a whole paragraph from every position, and a document made of
@@ -188,11 +188,108 @@
         const literal = lead.length === 2 ? lead[1] : lead;
         const inClass = /[\\\]^-]/.test(literal) ? '\\' + literal : literal;
         const run = `(?:[^${inClass}\\n]|\\n(?!\\s*\\n)){0,4096}`;
-        const guard = `${run}(?:${lead}(?!${rest})${run}){0,32}${closer.source}`;
-        return {
+        /*
+         * `escapeAware` opts a mode's GUARD into "an escaped delimiter is not a
+         * delimiter" (carve-grammars#385). Only the bare highlight asks for it,
+         * because it is the only closer here that a document can put a
+         * backslash in front of and mean it: `x =\= y` renders `x == y` with no
+         * mark, and this mode opened a run the engine does not.
+         *
+         * THE RUN CONSUMES AN ESCAPE AS A PAIR and refuses a bare backslash,
+         * rather than counting the backslash run in a lookbehind. Counting is
+         * what #385 shipped and what carve-grammars#390 replaces: a lookbehind
+         * that repeats a group has to be BOUNDED or it backtracks superlinearly
+         * (carve-grammars#380), and every bound is reachable - at `{0,32}` the
+         * guard stopped seeing the run at 66 backslashes and this mode refused a
+         * highlight the engine marks. A pair has no bound to reach.
+         *
+         * ONLY HALF THE FIX IS HERE. The guard proves a closer EXISTS; the span
+         * comes from `end`, which highlight.js applies on its own and which
+         * would still stop at an escaped `=`. What stops it is HIGHLIGHT listing
+         * ESCAPE in `contains` - that submode begins at the backslash, one
+         * column before the delimiter, so it wins by position and eats the pair.
+         * Neither half works alone: without this one the mode never opens,
+         * without the other it closes on the escaped delimiter.
+         *
+         * THE BOUND COUNTS ATOMS, and an escape pair is two characters, so the
+         * worst case is 8192 rather than 4096. Still a constant per position,
+         * which is all the bound is for; halving it would halve every ordinary
+         * body too.
+         *
+         * The default path is byte-identical to before, so the twelve other
+         * modes are untouched.
+         */
+        const escapedRun = `(?:\\\\[^\\n]|[^${inClass}\\n\\\\]|\\n(?!\\s*\\n)){0,4096}`;
+        const body = escapeAware ? escapedRun : run;
+        /*
+         * `flanked` says a closer may not FOLLOW WHITESPACE, which is the
+         * mirror of the `(?=\S)` every bare opener already carries
+         * (carve-grammars#392). Without it `a =b = d` scoped a highlight the
+         * engine renders literally, and so did the four other bare delimiters -
+         * one gap with five spellings. The nine BRACED modes do not ask for it
+         * and must not: the engine builds `a {*b *} d`, so a guard there would
+         * turn an over-scope into an under-scope.
+         *
+         * `end` IS LEFT ALONE, and that is forced by the engine twice over.
+         *
+         * A lookbehind ANYWHERE in a mode's `end` stops highlight.js closing
+         * the mode at all - `(?<=\S)=(?!\w)` and `=(?!\w)(?<=\S=)` both leave
+         * `x =b= y` coloured to end of line, with no error. And a CONSUMED
+         * flank, `[^\s\n]=(?!\w)`, closes correctly but starts one column
+         * earlier, which is exactly where the escape submode starts: it wins
+         * the tie and closes on the `\=` that carve-grammars#390 exists to
+         * refuse. Both measured on a two-line grammar before this was written.
+         *
+         * SO THE FALSE CLOSER IS EATEN INSTEAD OF REFUSED, the same shape #390
+         * uses for the escape. `falseCloser` begins at the WHITESPACE, one
+         * column before `end` could fire, so it wins by position and takes the
+         * delimiter as content; `end` then only ever sees a closer that stands
+         * against a non-space. Nothing about `end` changes, so this composes
+         * with the escape submode rather than fighting it.
+         *
+         * THE GUARD IS THE OTHER HALF, and it may consume, because it is inside
+         * a lookahead where nothing is really taken. Without it a run with no
+         * real closer would open, eat its false closers and colour to the end
+         * of its parent - worse than the over-scope this fixes. `notCloser`
+         * widens for the same reason: `a *b * c* d` is a bold run in the
+         * engine, and the guard has to be able to step over the middle star to
+         * see the real one.
+         */
+        /*
+         * THE FLANK CHARACTER SHARES THE BODY'S ALPHABET. A bare `[^\s\n]`
+         * would match a lone backslash, so on `x =\= y` the guard ends its body
+         * before the backslash, eats it as the flank, and proves a closer that
+         * `end` - correctly held off by the escape submode - then never fires
+         * on: the mode opens and colours to the end of its parent. An
+         * escape-aware flank is a PAIR or a non-backslash, exactly like the run.
+         */
+        // AN ESCAPED SPACE IS STILL A SPACE to the flanking rule: the engine
+        // renders `x =\\ = y` with no mark, so the pair may not stand as the
+        // non-space character the closer needs behind it.
+        const flankUnit = escapeAware ? '(?:\\\\[^\\s\\n]|[^\\s\\n\\\\])' : '[^\\s\\n]';
+        const endSource = flanked ? `${flankUnit}${closer.source}` : closer.source;
+        const notCloser = flanked
+            ? `(?:\\s${lead}|${lead}(?!${rest}))`
+            : `${lead}(?!${rest})`;
+        const guard = `${body}(?:${notCloser}${body}){0,32}${endSource}`;
+        const mode = {
             begin: new RegExp(`${opener.source}(?=${guard})`),
             end: closer,
         };
+        if (flanked) mode.contains = [{ begin: new RegExp(`\\s${closer.source}`) }];
+
+        return mode;
+    };
+
+    // Escaped characters: \* \[ etc
+    //
+    // DEFINED HERE, above the modes rather than beside HARD_BREAK where it used
+    // to sit, because HIGHLIGHT now `contains` it (carve-grammars#390) and a
+    // `const` cannot be read before its own declaration.
+    const ESCAPE = {
+        className: 'symbol',
+        begin: /\\[!"#$%&'()*+,.\/:;<=>?@\[\\\]^_`{|}~-]/,
+        relevance: 0,
     };
 
     // Forced intraword family (PART 9 S22). Content may contain the delimiter
@@ -282,14 +379,14 @@
     // (a/b, ://); the end is a closing slash not followed by word char/slash.
     const EMPHASIS = {
         className: 'emphasis',
-        ...paired(/(?<![\w:/])\/(?=\S)/, /\/(?![\w/])/),
+        ...paired(/(?<![\w:/])\/(?=\S)/, /\/(?![\w/])/, { flanked: true }),
         relevance: 0,
     };
 
     // Underline (Carve): _text_ - not in the middle of words
     const UNDERLINE = {
         className: 'emphasis',
-        ...paired(/(?<!\w)_(?!\s)/, /_(?!\w)/),
+        ...paired(/(?<!\w)_(?!\s)/, /_(?!\w)/, { flanked: true }),
         relevance: 0,
     };
 
@@ -314,17 +411,27 @@
      */
     const BOLD_ITALIC = {
         className: 'strong',
-        begin: /\/\*(?=\S)(?:[^*\n]|\*(?!\/)|\n(?!\s*\n)){1,4096}\*\//,
+        // The body is non-space at BOTH ends. It was guarded only at the
+        // opener, so `a /*b */ c` came back one combined run where the engine
+        // renders `<em>*b *</em>` - an italic run holding literal asterisks
+        // (carve-grammars#375). A fixed-width lookbehind, so the bounded
+        // repetition that keeps this rule linear is untouched.
+        begin: /\/\*(?=\S)(?:[^*\n]|\*(?!\/)|\n(?!\s*\n)){1,4096}(?<=\S)\*\//,
         relevance: 5,
     };
 
     // Strong: *text* - not in the middle of words, can contain emphasis.
     // Excludes *[ which is abbreviation-definition syntax.
+    const STRONG_PAIR = paired(/(?<!\w)\*(?![\s\[])/, /\*(?!\w)/, { flanked: true });
     const STRONG = {
         className: 'strong',
-        ...paired(/(?<!\w)\*(?![\s\[])/, /\*(?!\w)/),
+        ...STRONG_PAIR,
         relevance: 0,
-        contains: [EMPHASIS, UNDERLINE],
+        // SPREAD FIRST, then merge: `paired()` supplies a false-closer submode
+        // (carve-grammars#392) and a bare re-declaration would drop it, which
+        // is silent - the mode still opens, it just closes at the first
+        // delimiter standing after a space.
+        contains: [EMPHASIS, UNDERLINE, ...STRONG_PAIR.contains],
     };
 
     /*
@@ -356,9 +463,15 @@
      * opened and closed on the two `=` of a doubled run and scoped an empty
      * highlight over a line the engine renders literally.
      *
-     * THE CLOSER IS DELIBERATELY NOT GUARDED, and the asymmetry is the
-     * engine's: once a highlight is open the closer wins over the pattern, so
-     * `x =y z<= w` marks `y z<` and `x =y z=> w` marks `y z`.
+     * THE CLOSER IS DELIBERATELY NOT GUARDED AGAINST SMART TYPOGRAPHY, and the
+     * asymmetry is the engine's: once a highlight is open the closer wins over
+     * the pattern, so `x =y z<= w` marks `y z<` and `x =y z=> w` marks `y z`.
+     *
+     * AN ESCAPE IS A DIFFERENT QUESTION (carve-grammars#385). An escaped `=` is
+     * not a delimiter at all - `x =\= y` renders `x == y` with no mark - and
+     * this mode closed on one. `paired`'s third argument is what says so; it is
+     * the only mode here that asks for it, because it is the only closer a
+     * document can put a backslash in front of and mean it.
      *
      * ONE SHAPE IT COSTS: `<https://e.example>=hi=`, where the `>` closes an
      * autolink rather than opening a comparison. A fixed-width lookbehind
@@ -366,9 +479,16 @@
      * that trade - the ticket's own reasoning, since a false highlight claims
      * the document holds a construct it does not.
      */
+    const HIGHLIGHT_PAIR = paired(/(?<![=\w])=(?=\S)(?![>=])/, /=(?![=\w])/, { escapeAware: true, flanked: true });
     const HIGHLIGHT = {
         className: 'addition',
-        ...paired(/(?<![=\w])=(?=\S)(?![>=])/, /=(?![=\w])/),
+        ...HIGHLIGHT_PAIR,
+        // The other half of carve-grammars#390's escape fix - see `paired`.
+        // `end` would close on an escaped `=`; this submode begins one column
+        // earlier, at the backslash, and highlight.js resolves by position.
+        // The false-closer submode `paired()` supplies (carve-grammars#392) is
+        // kept alongside it: a bare `contains: [ESCAPE]` here would drop it.
+        contains: [ESCAPE, ...HIGHLIGHT_PAIR.contains],
         relevance: 3,
     };
 
@@ -380,16 +500,21 @@
     };
 
     // Delete: {-text-}
+    //
+    // THE BODY IS NOT EMPTY. `{--}` is a braced EN DASH, not an empty deletion -
+    // the engine renders `a {--} b` as `a \u2013 b` - and this mode read it as
+    // `{-` plus nothing plus `-}` (carve-grammars#378). One character is enough:
+    // `{- -}`, `{---}` and `{----}` are all deletions.
     const DELETE = {
         className: 'deletion',
-        ...paired(/\{-/, /-\}/),
+        ...paired(/\{-(?!-\})/, /-\}/),
         relevance: 5,
     };
 
     // Strikethrough (Carve): ~text~ (Djot uses ~ for subscript instead)
     const STRIKETHROUGH = {
         className: 'deletion',
-        ...paired(/(?<!\w)~(?=\S)/, /~(?!\w)/),
+        ...paired(/(?<!\w)~(?=\S)/, /~(?!\w)/, { flanked: true }),
         relevance: 2,
     };
 
@@ -647,7 +772,7 @@
     // dash alternatives: preceded by a non-space, or not followed by a word.
     const TYPOGRAPHY = {
         className: 'literal',
-        begin: /\.\.\.|<-->|<--|-->|<=>|<==|==>|<->|<-|->|(?:(?<=\S)(?:---|--)|(?:---|--)(?!\w))|!=|<=|>=|\+-|\(c\)|\(r\)|\(tm\)/,
+        begin: /\{--\}|\.\.\.|<-->|<--|-->|<=>|<==|==>|<->|<-|->|(?:(?<=\S)(?:---|--)|(?:---|--)(?!\w))|!=|<=|>=|\+-|\(c\)|\(r\)|\(tm\)/,
         relevance: 0,
     };
 
@@ -1470,13 +1595,6 @@
         className: 'meta',
         begin: /\{=[a-zA-Z]+\}/,
         relevance: 5,
-    };
-
-    // Escaped characters: \* \[ etc
-    const ESCAPE = {
-        className: 'symbol',
-        begin: /\\[!"#$%&'()*+,.\/:;<=>?@\[\\\]^_`{|}~-]/,
-        relevance: 0,
     };
 
     // Hard line break: \ at end of line
