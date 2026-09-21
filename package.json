@@ -17,6 +17,7 @@
   ],
   "scripts": {
     "sync": "node scripts/sync.mjs",
+    "drift:upstream": "node test/upstream-drift.mjs",
     "test": "node test/registration-test.mjs && node test/drift-test.mjs && node test/coverage-test.mjs"
   },
   "keywords": [

@@ -49,12 +49,11 @@ export function upstreamVersion() {
 }
 
 /** The vendored file: a provenance header plus the upstream definition verbatim. */
-export function render() {
-    const source = readFileSync(grammarFile(), 'utf8')
+export function render(source = readFileSync(grammarFile(), 'utf8'), version = upstreamVersion()) {
     const header = [
         '// GENERATED FILE - DO NOT EDIT.',
         '//',
-        '// Vendored verbatim from @markup-carve/carve-grammars@' + upstreamVersion(),
+        '// Vendored verbatim from @markup-carve/carve-grammars@' + version,
         '// (highlightjs/carve.js) by scripts/sync.mjs. Edit the definition there,',
         '// release carve-grammars, then run: npm run sync',
         '',

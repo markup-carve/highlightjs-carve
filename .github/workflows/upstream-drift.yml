@@ -1,0 +1,26 @@
+name: Upstream drift
+
+# CI compares the vendored definition against the INSTALLED carve-grammars,
+# which the lockfile holds still. This compares it against the latest
+# published release, so a new carve-grammars shows up here within a day.
+# It fails rather than warns: the fix is a one-line re-vendor PR.
+
+on:
+  schedule:
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm run drift:upstream
