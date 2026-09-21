@@ -45,7 +45,7 @@
     "highlight.js": "^11"
   },
   "devDependencies": {
-    "@markup-carve/carve-grammars": "^0.1.8",
+    "@markup-carve/carve-grammars": "^0.1.9",
     "highlight.js": "^11.11.1"
   },
   "publishConfig": {
