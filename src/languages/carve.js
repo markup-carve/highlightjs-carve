@@ -1,6 +1,6 @@
 // GENERATED FILE - DO NOT EDIT.
 //
-// Vendored verbatim from @markup-carve/carve-grammars@0.1.8
+// Vendored verbatim from @markup-carve/carve-grammars@0.1.9
 // (highlightjs/carve.js) by scripts/sync.mjs. Edit the definition there,
 // release carve-grammars, then run: npm run sync
 /**
@@ -139,6 +139,85 @@
     }
     // The same body, required to be non-empty, for the rules that reject `[]`.
     const BRACKET_TEXT_NONEMPTY = '(?!\\])' + BRACKET_TEXT;
+
+    const BRACED_KINDS = ['\\*', '/', '_', '\\^', ',', '~', '=', '\\+', '-', '#', '%'];
+    const bracedSource = (kinds) => '\\{(?:'
+        + kinds.map((kind) => kind + '(?:[^' + kind + '\\n]|' + kind + '(?!\\})){1,4096}' + kind).join('|')
+        + ')\\}';
+    const OPAQUE_BRACED_SOURCE = bracedSource(BRACED_KINDS);
+    // Link destinations and autolinks are opaque too (PART 9 section 9 E2a), so
+    // `/see [x](http://a.b/c/) now/` does not close at the `/` before `)`.
+    // Each part accepts only what its production does: a complete label before
+    // `](` (`link_text`, four levels deep), the destination and title escapes,
+    // one space before a title, and the `url_char` and `email_autolink`
+    // alphabets. Parentheses nest two levels inside a destination.
+    const LABEL_LINE_END = String.raw`\n(?![ \t]*\n)`;
+    const LABEL_COMMENT = String.raw`#(?:[^#\n]|#(?!\})|` + LABEL_LINE_END + String.raw`){1,512}#\}`;
+    const LABEL_CODE = [3, 2, 1].map((n) => {
+        const run = '```'.slice(0, n);
+        return run + '(?:[^`\\n]|' + (n > 1 ? '`(?!' + run.slice(1) + ')|' : '') + LABEL_LINE_END + '){1,512}' + run + '(?!`)';
+    }).join('|');
+    const LABEL_CHAR = String.raw`\\(?:[^\n]|(?=\n))|` + LABEL_CODE + String.raw`|\{` + LABEL_COMMENT
+        + String.raw`|\{(?!` + LABEL_COMMENT + ')|[^\\[\\]\\\\`{\\n]|' + LABEL_LINE_END;
+    let OPAQUE_LABEL = '(?:' + LABEL_CHAR + '){0,512}';
+    for (let depth = 0; depth < 3; depth++) {
+        OPAQUE_LABEL = '(?:' + LABEL_CHAR + String.raw`|\[` + OPAQUE_LABEL + String.raw`\]){0,512}`;
+    }
+    // `email_autolink` letters are Unicode letters. Without the `u` flag any
+    // non-ASCII character that is not whitespace stands in for one.
+    const emailClass = (chars) => String.raw`(?:[A-Za-z` + chars + String.raw`]|[^\x00-\x7F\s])`;
+    const DEST_CHAR = String.raw`\\[()\\]|\\(?![()\\])|[^ \t\r\n()\\]`;
+    const DESTINATION = '(?:' + DEST_CHAR + String.raw`|\((?:` + DEST_CHAR + String.raw`|\((?:` + DEST_CHAR + String.raw`){0,256}\)){0,256}\)){0,2048}`;
+    const titled = (quote) => quote + String.raw`(?:\\` + quote + String.raw`|\\(?!` + quote + ')|[^' + quote + String.raw`\\\r\n]){0,512}` + quote;
+    // A destination is never empty (carve#2070): `[x]()` and `[x]( "t")` are text.
+    const LINK_TAIL = String.raw`\]\((?![ \t\r\n)])` + DESTINATION + '(?: (?:' + titled('"') + '|' + titled("'") + String.raw`))?\)`;
+    // `url_char` outside ASCII excludes C1 controls, White_Space and format
+    // characters; a format character above the BMP is caught at its surrogates.
+    const URL_CHAR = String.raw`(?:[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]`
+        + String.raw`|(?!\uD804[\uDCBD\uDCCD]|\uD80D[\uDC30-\uDC3F]|\uD82F[\uDCA0-\uDCA3]|\uD834[\uDD73-\uDD7A]|\uDB40[\uDC01\uDC20-\uDC7F])`
+        + String.raw`[^\x00-\xA0\xAD\u0600-\u0605\u061C\u06DD\u070F\u0890\u0891\u08E2\u1680\u180E\u2000-\u200F\u2028-\u202F\u205F-\u2064\u2066-\u206F\u3000\uFEFF\uFFF9-\uFFFB])`;
+    const OPAQUE_INLINE_SOURCE = '(?:' + OPAQUE_BRACED_SOURCE
+        + String.raw`|\[` + OPAQUE_LABEL + LINK_TAIL
+        + String.raw`|<[a-zA-Z][a-zA-Z0-9+.\-]{0,2047}:` + URL_CHAR + '{1,2048}>'
+        + '|<' + emailClass(String.raw`0-9\-_.+`) + String.raw`{1,512}@(?:` + emailClass(String.raw`0-9\-_`) + String.raw`{1,512}\.){1,64}` + emailClass('') + '{1,512}>'
+        + ')';
+    // A bare run as markup-carve/vscode-carve#258 reads it: a closed code span
+    // and a braced span of another kind are atoms, a delimiter of its own kind
+    // is body text where it cannot close, and the closer needs no letter or
+    // digit after it. Without the `u` flag, any non-ASCII character counts as
+    // a letter.
+    const LETTER_OR_DIGIT = '[A-Za-z0-9\\u0080-\\uFFFF]';
+    const BARE_CODE = '```(?:[^`\\n]|`(?!``)){1,4096}```(?!`)|``(?:[^`\\n]|`(?!`)){1,4096}``(?!`)|`[^`\\n]{1,4096}`(?!`)';
+    const bareCloser = (d) => `(?<=\\S)${d}(?!${LETTER_OR_DIGIT})`;
+    // A braced span's body: a braced span of another kind, a closed code span
+    // and a link destination or autolink are atoms, so the closer is the first
+    // one outside all three. An insertion or deletion (`atoms` false) closes at
+    // its first closer.
+    const DESTINATION_SOURCE = OPAQUE_INLINE_SOURCE.replace(OPAQUE_BRACED_SOURCE + '|', '');
+    const braced = (d, opener, atoms = true) => {
+        const atom = '(?:' + (atoms ? bracedSource(BRACED_KINDS.filter((kind) => kind !== d)) + '|' : '')
+            + `${BARE_CODE}|${DESTINATION_SOURCE})`;
+        // The cheap scan, tempered on the delimiter, fails fast where no closer
+        // exists at all.
+        const run = `(?:[^${d}\\n]|\\n(?![ \\t]*\\n)){0,4096}`;
+        const cheap = `${run}(?:${d}(?!\\})${run}){0,32}${d}\\}`;
+        const body = `(?:${atom}|\\\\(?:[^\\n]|\\n(?![ \\t]*\\n))|(?!${atom})[^\\n\\\\]|\\n(?![ \\t]*\\n)){0,4096}?`;
+        return {
+            begin: new RegExp(`${opener.source}(?=${cheap})(?=${body}${d}\\})`),
+            end: new RegExp(`${d}\\}`),
+        };
+    };
+    const bare = (d, opener) => {
+        const opaque = OPAQUE_INLINE_SOURCE.replace(OPAQUE_BRACED_SOURCE, bracedSource(BRACED_KINDS.filter((kind) => kind !== d)));
+        const atom = `(?:\\\\(?:[^\\n]|\\n(?![ \\t]*\\n))|${BARE_CODE}|${opaque}|(?<=\\s)${d}|${d}(?=${LETTER_OR_DIGIT})`
+            + `|(?!${opaque})[^${d}\\\\\\n\`]|\\n(?![ \\t]*\\n))`;
+        return {
+            begin: new RegExp(`${opener.source}(?=${atom}{1,4096}?${bareCloser(d)})`),
+            // A lookbehind in `end` never matches in highlight.js, so a delimiter
+            // after whitespace is consumed by a content mode instead.
+            end: new RegExp(`${d}(?!${LETTER_OR_DIGIT})`),
+        };
+    };
     /**
      * A begin/end mode opens its span the moment `begin` matches, whether or
      * not the closer ever arrives - so an unpartnered delimiter colors every
@@ -157,7 +236,7 @@
      * @returns {object} the mode's `begin`/`end` pair, so the closer used by
      *   the guard and the closer used by the mode cannot drift apart.
      */
-    const paired = (opener, closer, { escapeAware = false, flanked = false } = {}) => {
+    const paired = (opener, closer) => {
         // The guard used to be written `(?:[^\n]|\n(?!\s*\n))*?` - unbounded,
         // lazy, and free to cross newlines. Proving there is NO closer therefore
         // cost a whole paragraph from every position, and a document made of
@@ -187,98 +266,14 @@
         const [, lead, rest] = /^(\\[\s\S]|[\s\S])([\s\S]*)$/.exec(closer.source);
         const literal = lead.length === 2 ? lead[1] : lead;
         const inClass = /[\\\]^-]/.test(literal) ? '\\' + literal : literal;
-        const run = `(?:[^${inClass}\\n]|\\n(?!\\s*\\n)){0,4096}`;
-        /*
-         * `escapeAware` opts a mode's GUARD into "an escaped delimiter is not a
-         * delimiter" (carve-grammars#385). Only the bare highlight asks for it,
-         * because it is the only closer here that a document can put a
-         * backslash in front of and mean it: `x =\= y` renders `x == y` with no
-         * mark, and this mode opened a run the engine does not.
-         *
-         * THE RUN CONSUMES AN ESCAPE AS A PAIR and refuses a bare backslash,
-         * rather than counting the backslash run in a lookbehind. Counting is
-         * what #385 shipped and what carve-grammars#390 replaces: a lookbehind
-         * that repeats a group has to be BOUNDED or it backtracks superlinearly
-         * (carve-grammars#380), and every bound is reachable - at `{0,32}` the
-         * guard stopped seeing the run at 66 backslashes and this mode refused a
-         * highlight the engine marks. A pair has no bound to reach.
-         *
-         * ONLY HALF THE FIX IS HERE. The guard proves a closer EXISTS; the span
-         * comes from `end`, which highlight.js applies on its own and which
-         * would still stop at an escaped `=`. What stops it is HIGHLIGHT listing
-         * ESCAPE in `contains` - that submode begins at the backslash, one
-         * column before the delimiter, so it wins by position and eats the pair.
-         * Neither half works alone: without this one the mode never opens,
-         * without the other it closes on the escaped delimiter.
-         *
-         * THE BOUND COUNTS ATOMS, and an escape pair is two characters, so the
-         * worst case is 8192 rather than 4096. Still a constant per position,
-         * which is all the bound is for; halving it would halve every ordinary
-         * body too.
-         *
-         * The default path is byte-identical to before, so the twelve other
-         * modes are untouched.
-         */
-        const escapedRun = `(?:\\\\[^\\n]|[^${inClass}\\n\\\\]|\\n(?!\\s*\\n)){0,4096}`;
-        const body = escapeAware ? escapedRun : run;
-        /*
-         * `flanked` says a closer may not FOLLOW WHITESPACE, which is the
-         * mirror of the `(?=\S)` every bare opener already carries
-         * (carve-grammars#392). Without it `a =b = d` scoped a highlight the
-         * engine renders literally, and so did the four other bare delimiters -
-         * one gap with five spellings. The nine BRACED modes do not ask for it
-         * and must not: the engine builds `a {*b *} d`, so a guard there would
-         * turn an over-scope into an under-scope.
-         *
-         * `end` IS LEFT ALONE, and that is forced by the engine twice over.
-         *
-         * A lookbehind ANYWHERE in a mode's `end` stops highlight.js closing
-         * the mode at all - `(?<=\S)=(?!\w)` and `=(?!\w)(?<=\S=)` both leave
-         * `x =b= y` coloured to end of line, with no error. And a CONSUMED
-         * flank, `[^\s\n]=(?!\w)`, closes correctly but starts one column
-         * earlier, which is exactly where the escape submode starts: it wins
-         * the tie and closes on the `\=` that carve-grammars#390 exists to
-         * refuse. Both measured on a two-line grammar before this was written.
-         *
-         * SO THE FALSE CLOSER IS EATEN INSTEAD OF REFUSED, the same shape #390
-         * uses for the escape. `falseCloser` begins at the WHITESPACE, one
-         * column before `end` could fire, so it wins by position and takes the
-         * delimiter as content; `end` then only ever sees a closer that stands
-         * against a non-space. Nothing about `end` changes, so this composes
-         * with the escape submode rather than fighting it.
-         *
-         * THE GUARD IS THE OTHER HALF, and it may consume, because it is inside
-         * a lookahead where nothing is really taken. Without it a run with no
-         * real closer would open, eat its false closers and colour to the end
-         * of its parent - worse than the over-scope this fixes. `notCloser`
-         * widens for the same reason: `a *b * c* d` is a bold run in the
-         * engine, and the guard has to be able to step over the middle star to
-         * see the real one.
-         */
-        /*
-         * THE FLANK CHARACTER SHARES THE BODY'S ALPHABET. A bare `[^\s\n]`
-         * would match a lone backslash, so on `x =\= y` the guard ends its body
-         * before the backslash, eats it as the flank, and proves a closer that
-         * `end` - correctly held off by the escape submode - then never fires
-         * on: the mode opens and colours to the end of its parent. An
-         * escape-aware flank is a PAIR or a non-backslash, exactly like the run.
-         */
-        // AN ESCAPED SPACE IS STILL A SPACE to the flanking rule: the engine
-        // renders `x =\\ = y` with no mark, so the pair may not stand as the
-        // non-space character the closer needs behind it.
-        const flankUnit = escapeAware ? '(?:\\\\[^\\s\\n]|[^\\s\\n\\\\])' : '[^\\s\\n]';
-        const endSource = flanked ? `${flankUnit}${closer.source}` : closer.source;
-        const notCloser = flanked
-            ? `(?:\\s${lead}|${lead}(?!${rest}))`
-            : `${lead}(?!${rest})`;
-        const guard = `${body}(?:${notCloser}${body}){0,32}${endSource}`;
-        const mode = {
+        const plainAtom = `[^${inClass}\\n]`;
+        const run = `(?:${plainAtom}|\\n(?!\\s*\\n)){0,4096}`;
+        const guard = `${run}(?:${lead}(?!${rest})${run}){0,32}${closer.source}`;
+        return {
             begin: new RegExp(`${opener.source}(?=${guard})`),
             end: closer,
+            contains: [],
         };
-        if (flanked) mode.contains = [{ begin: new RegExp(`\\s${closer.source}`) }];
-
-        return mode;
     };
 
     // Escaped characters: \* \[ etc
@@ -295,19 +290,24 @@
     // Forced intraword family (PART 9 S22). Content may contain the delimiter
     // (`{/a/b/}` is <em>a/b</em>), so the run ends at the closing `X}`. These
     // must precede ATTRIBUTE, or `{_path_}` reads as a boolean attribute.
-    const FORCED_STRONG = { className: 'strong', ...paired(/\{\*(?=\S)/, /\*\}/), relevance: 5 };
-    const FORCED_EMPHASIS = { className: 'emphasis', ...paired(/\{\/(?=\S)/, /\/\}/), relevance: 5 };
-    const FORCED_UNDERLINE = { className: 'emphasis', ...paired(/\{_(?=\S)/, /_\}/), relevance: 5 };
-    // The `(?!...~>)` is what keeps a substitution (`{~old~>new~}`) out of the
-    // strikethrough rule. It used to be spelled `(?!.*~>)`, a greedy scan of the
-    // whole rest of the line that then backtracked over it looking for the
-    // arrow - so on a line with no `>` at all it cost the line from every
-    // position, which is the other half of why `{~` stayed superlinear after
-    // the guard was bounded. Same unrolling as everywhere else here.
-    const NO_ARROW_AHEAD = '(?![^~\\n]{0,4096}(?:~(?!>)[^~\\n]{0,4096}){0,32}~>)';
+    const FORCED_STRONG = { className: 'strong', ...braced('\\*', /\{\*(?!\*\})/), relevance: 5 };
+    const FORCED_EMPHASIS = { className: 'emphasis', ...braced('/', /\{\/(?!\/\})/), relevance: 5 };
+    const FORCED_UNDERLINE = { className: 'emphasis', ...braced('_', /\{_(?!_\})/), relevance: 5 };
+    // A substitution splits at its first top-level arrow: code, a comment and
+    // an escape are opaque (markup-carve/carve#2092). A code span still open
+    // at the closer ends there.
+    const SUBSTITUTION_ATOM = '\\\\[^\\n]'
+        + '|```(?:[^`\\n]|`(?!``)){1,4096}```(?!`)|``(?:[^`\\n]|`(?!`)){1,4096}``(?!`)|`[^`\\n]{1,4096}`(?!`)'
+        + '|\\{#(?:[^#\\n]|#(?!\\})){0,4096}#\\}|\\{%(?:[^%\\n]|%(?!\\})){0,4096}%\\}';
+    const substitutionHalf = (notAfterTilde) => '(?:' + SUBSTITUTION_ATOM
+        + (notAfterTilde === '}' ? '|`+(?![^`\\n]{0,4096}`)' : '')
+        + '|\\{(?!#(?:[^#\\n]|#(?!\\})){0,4096}#\\}|%(?:[^%\\n]|%(?!\\})){0,4096}%\\})'
+        + '|[^\\\\`{~\\n]|~(?![' + notAfterTilde + '])){0,4096}?';
+    const SUBSTITUTION_AHEAD = substitutionHalf('>}') + '~>' + substitutionHalf('}') + '~\\}';
     const FORCED_STRIKE = {
         className: 'deletion',
-        ...paired(new RegExp(`\\{~(?=\\S)${NO_ARROW_AHEAD}`), /~\}/),
+        // Forced content may be whitespace, but the empty `{~~}` is literal.
+        ...braced('~', /\{~(?!~\})/),
         relevance: 5,
     };
 
@@ -325,11 +325,10 @@
      * has no `=}` ahead of it, so the guard fails and the mode does not open,
      * leaving RAW_FORMAT the `{=[a-zA-Z]+\}` it already matches.
      *
-     * The empty pair `{==}` still opens here, as `{**}` does on FORCED_STRONG
-     * and `{//}` on FORCED_EMPHASIS - carve#1447 makes it literal text, and
-     * this mode matches its siblings rather than fixing that on one of five.
+     * Forced content may consist only of whitespace, but the empty `{==}` is
+     * literal, like every other empty pair in the family.
      */
-    const FORCED_HIGHLIGHT = { className: 'addition', ...paired(/\{=(?=\S)/, /=\}/), relevance: 5 };
+    const FORCED_HIGHLIGHT = { className: 'addition', ...braced('=', /\{=(?!=\})/), relevance: 5 };
 
     const ATTRIBUTE_EMPTY = {
         className: 'attr',
@@ -345,8 +344,10 @@
         // engine renders prose (#164). The line-anchored branch is a lookbehind so
         // the match still starts at the `{`.
         begin: new RegExp(
-            '(?<=(?:^|\\n)[ \\t]*)\\{\\s*' + ATTR_ITEM + '(?:\\s+' + ATTR_ITEM + ')*\\s*\\}'
-            + '|\\{[ \\t]*' + ATTR_ITEM + '(?:[ \\t]+' + ATTR_ITEM + ')*[ \\t]*\\}',
+            '(?=\\{)(?<=(?:^|\\n)[ \\t]*)\\{(?!__\\})\\s*' + ATTR_ITEM + '(?:\\s+' + ATTR_ITEM + ')*\\s*\\}' + '(?=(?:[ \\t]*\\{(?:"(?:\\\\.|[^"\\\\\\n])*"|\'(?:\\\\.|[^\'\\\\\\n])*\'|[^{}"\'\\n])*\\})*[ \\t]*(?:\\n|$))'
+            + '|(?=\\{)(?<=[*/_~=`>}:)\\]$<|])' + '\\{(?!__\\})[ \\t]*' + ATTR_ITEM + '(?:[ \\t]+' + ATTR_ITEM + ')*[ \\t]*\\}'
+            + '|(?=\\{)(?<=(?:^|\\n)[ \\t]*(?:[-+*]|\\d{1,9}[.)]|[A-Za-z]{1,8}[.)]|\\.))' + '\\{(?!__\\})[ \\t]*' + ATTR_ITEM + '(?:[ \\t]+' + ATTR_ITEM + ')*[ \\t]*\\}'
+            + '|(?=\\{)(?<=(?:^|\\n)[ \\t]*(?:[-+*]|\\d{1,9}[.)]|[A-Za-z]{1,8}[.)]|\\.)(?:\\{[^{}\\n]*\\})?(?:[ \\t]+\\[[ xX]\\])?[ \\t]+)' + '\\{(?!__\\})[ \\t]*' + ATTR_ITEM + '(?:[ \\t]+' + ATTR_ITEM + ')*[ \\t]*\\}' + '(?=[ \\t]*(?:\\n|$))',
         ),
         relevance: 5,
     };
@@ -354,16 +355,32 @@
     // Front matter is valid only at byte offset zero. Unlike the historical
     // `^---$` rule, the negative lookbehind below cannot match a thematic break
     // on a later line even though highlight.js compiles modes with `m`.
-    const FRONT_MATTER = {
+    const frontMatter = (format) => ({
         className: 'meta',
-        begin: /^(?<![\s\S])\uFEFF?---(?:[A-Za-z0-9_-]+| [A-Za-z0-9_-]+)?[ \t]*$/,
+        begin: new RegExp('^(?<![\\s\\S])\\uFEFF?---' + format + '[ \\t]*$'),
         end: /^---[ \t]*$/,
         relevance: 10,
-        contains: [
-            { className: 'symbol', begin: /^[A-Za-z_][\w-]*(?=[ \t]*:)/ },
-            { className: 'punctuation', begin: /---/ },
-        ],
-    };
+        contains: [{ className: 'punctuation', begin: /---/ }],
+    });
+    const delegatedFrontMatter = (format, subLanguage) => ({
+        className: 'meta',
+        begin: new RegExp('^(?<![\\s\\S])\\uFEFF?---' + format + '[ \\t]*$'),
+        end: /$/,
+        relevance: 10,
+        contains: [{ className: 'punctuation', begin: /---/ }],
+        starts: {
+            end: /^---[ \t]*$/,
+            subLanguage,
+        },
+    });
+    const FRONT_MATTER = [
+        delegatedFrontMatter(' ?json', 'json'),
+        // highlight.js registers TOML through the canonical `ini` grammar;
+        // `toml` is an alias, but subLanguage resolution requires the key.
+        delegatedFrontMatter(' ?toml', 'ini'),
+        delegatedFrontMatter('(?: ?(?:yaml|yml))?', 'yaml'),
+        frontMatter(' ?[A-Za-z0-9_-]+'),
+    ];
 
     // Headings: # to ######
     const HEADING = {
@@ -375,18 +392,17 @@
         relevance: 10,
     };
 
-    // Emphasis (Carve): /text/ - the begin guard avoids URLs and paths
-    // (a/b, ://); the end is a closing slash not followed by word char/slash.
+    // Emphasis (Carve): /text/ - the begin guard avoids URLs and paths (a/b, ://).
     const EMPHASIS = {
         className: 'emphasis',
-        ...paired(/(?<![\w:/])\/(?=\S)/, /\/(?![\w/])/, { flanked: true }),
+        ...bare('/', /(?<![\w:/])\/(?=\S)(?!\/)/),
         relevance: 0,
     };
 
     // Underline (Carve): _text_ - not in the middle of words
     const UNDERLINE = {
         className: 'emphasis',
-        ...paired(/(?<!\w)_(?!\s)/, /_(?!\w)/, { flanked: true }),
+        ...bare('_', /(?<![\w/])_(?![\s_])/),
         relevance: 0,
     };
 
@@ -422,16 +438,12 @@
 
     // Strong: *text* - not in the middle of words, can contain emphasis.
     // Excludes *[ which is abbreviation-definition syntax.
-    const STRONG_PAIR = paired(/(?<!\w)\*(?![\s\[])/, /\*(?!\w)/, { flanked: true });
+    const STRONG_PAIR = bare('\\*', /(?<![\w*])\*(?![\s\[*])/);
     const STRONG = {
         className: 'strong',
         ...STRONG_PAIR,
         relevance: 0,
-        // SPREAD FIRST, then merge: `paired()` supplies a false-closer submode
-        // (carve-grammars#392) and a bare re-declaration would drop it, which
-        // is silent - the mode still opens, it just closes at the first
-        // delimiter standing after a space.
-        contains: [EMPHASIS, UNDERLINE, ...STRONG_PAIR.contains],
+        // Content modes are assigned once every mode exists.
     };
 
     /*
@@ -456,22 +468,16 @@
      * need them: Prism applies TOKENS IN ORDER rather than by position, and
      * 'highlight' is declared before 'typography' there.
      *
-     * `=` IS IN THE OPENER'S OWN LOOKAHEAD HERE and not in the other two
-     * grammars, because those spell the body as `[^=\n]+?` and get the same
-     * refusal from the content class. `paired` derives its guard from the
-     * CLOSER, so nothing here requires the body to be non-empty: `x == y`
-     * opened and closed on the two `=` of a doubled run and scoped an empty
-     * highlight over a line the engine renders literally.
+     * `=` IS IN THE OPENER'S OWN LOOKAHEAD: a doubled run opens nothing, so
+     * `x == y` stays literal.
      *
      * THE CLOSER IS DELIBERATELY NOT GUARDED AGAINST SMART TYPOGRAPHY, and the
      * asymmetry is the engine's: once a highlight is open the closer wins over
      * the pattern, so `x =y z<= w` marks `y z<` and `x =y z=> w` marks `y z`.
      *
-     * AN ESCAPE IS A DIFFERENT QUESTION (carve-grammars#385). An escaped `=` is
-     * not a delimiter at all - `x =\= y` renders `x == y` with no mark - and
-     * this mode closed on one. `paired`'s third argument is what says so; it is
-     * the only mode here that asks for it, because it is the only closer a
-     * document can put a backslash in front of and mean it.
+     * AN ESCAPED `=` IS NOT A DELIMITER (carve-grammars#385): `x =\= y`
+     * renders `x == y` with no mark. The guard consumes an escape as a pair,
+     * and ESCAPE runs first among the content modes.
      *
      * ONE SHAPE IT COSTS: `<https://e.example>=hi=`, where the `>` closes an
      * autolink rather than opening a comparison. A fixed-width lookbehind
@@ -479,23 +485,19 @@
      * that trade - the ticket's own reasoning, since a false highlight claims
      * the document holds a construct it does not.
      */
-    const HIGHLIGHT_PAIR = paired(/(?<![=\w])=(?=\S)(?![>=])/, /=(?![=\w])/, { escapeAware: true, flanked: true });
+    const HIGHLIGHT_PAIR = bare('=', /(?<![=\w])=(?=\S)(?![>=])/);
     const HIGHLIGHT = {
         className: 'addition',
         ...HIGHLIGHT_PAIR,
-        // The other half of carve-grammars#390's escape fix - see `paired`.
-        // `end` would close on an escaped `=`; this submode begins one column
-        // earlier, at the backslash, and highlight.js resolves by position.
-        // The false-closer submode `paired()` supplies (carve-grammars#392) is
-        // kept alongside it: a bare `contains: [ESCAPE]` here would drop it.
-        contains: [ESCAPE, ...HIGHLIGHT_PAIR.contains],
+        // Its content modes, ESCAPE first, are assigned once every mode exists:
+        // ESCAPE begins at the backslash, so an escaped `=` never reaches `end`.
         relevance: 3,
     };
 
     // Insert: {+text+}
     const INSERT = {
         className: 'addition',
-        ...paired(/\{\+/, /\+\}/),
+        ...braced('\\+', /\{\+(?!\+\})/, false),
         relevance: 5,
     };
 
@@ -507,28 +509,28 @@
     // `{- -}`, `{---}` and `{----}` are all deletions.
     const DELETE = {
         className: 'deletion',
-        ...paired(/\{-(?!-\})/, /-\}/),
+        ...braced('-', /\{-(?!-\})/, false),
         relevance: 5,
     };
 
     // Strikethrough (Carve): ~text~ (Djot uses ~ for subscript instead)
     const STRIKETHROUGH = {
         className: 'deletion',
-        ...paired(/(?<!\w)~(?=\S)/, /~(?!\w)/, { flanked: true }),
+        ...bare('~', /(?<![\w~])~(?![\s~])/),
         relevance: 2,
     };
 
     // Subscript (Carve): braced-only `{,text,}` - a bare `,` is literal text.
     const SUBSCRIPT = {
         className: 'built_in',
-        ...paired(/\{,(?=\S)/, /,\}/),
+        ...braced(',', /\{,(?!,\})/),
         relevance: 3,
     };
 
     // Superscript (Carve): braced-only `{^text^}` - a bare `^` is literal text.
     const SUPERSCRIPT = {
         className: 'built_in',
-        ...paired(/\{\^(?=\S)/, /\^\}/),
+        ...braced('\\^', /\{\^(?!\^\})/),
         relevance: 3,
     };
 
@@ -635,7 +637,7 @@
     // Inline links: [text](url) with optional trailing attributes
     const LINK = {
         className: 'link',
-        begin: new RegExp('\\[' + BRACKET_TEXT + '\\]\\([^)]*\\)(\\{[^}]+\\})?'),
+        begin: new RegExp('\\[' + BRACKET_TEXT + LINK_TAIL + '(\\{[^}]+\\})?'),
         relevance: 5,
     };
 
@@ -656,7 +658,7 @@
     // Images: ![alt](url) with optional trailing attributes
     const IMAGE = {
         className: 'link',
-        begin: new RegExp('!\\[' + BRACKET_TEXT + '\\]\\([^)]*\\)(\\{[^}]+\\})?'),
+        begin: new RegExp('!\\[' + BRACKET_TEXT + LINK_TAIL + '(\\{[^}]+\\})?'),
         relevance: 5,
     };
 
@@ -700,12 +702,26 @@
         relevance: 5,
     };
 
-    // Reference definitions: [ref]: url
+    // Reference definitions: [ref]: url "title". The destination and the
+    // `link_title` are scoped apart, as TextMate does (#523).
     const REFERENCE_DEF = {
         className: 'symbol',
-        begin: /^(?:(?<![\s\S])\uFEFF)?[ \t]*\[[^\]^\]]+\]:(?= )/,
+        // Anchored at end of line, so `[a]: /u zzz` stays prose (#533).
+        begin: /^(?:(?<![\s\S])\uFEFF)?[ \t]*\[(?!@|\^[^\]])[^\]]+\]:(?= [^\S\n]*(?:\S|\uFEFF)+(?: (?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'))?(?: \{[^{}\n]*\})?[ \t]*$)/,
         end: /$/,
         relevance: 10,
+        contains: [
+            // Only on a line that completes a definition; `[a]: /u zzz` is
+            // prose (grammar.ebnf `reference_definition`, anchored at end of line).
+            {
+                className: 'link',
+                begin: /(?=\S|\uFEFF)(?<=\]: [^\S\n]*)(?:\S|\uFEFF)+(?=(?: (?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'))?(?: \{[^\n]*\})?[ \t]*$)/,
+            },
+            {
+                className: 'string',
+                begin: /(?=["'])(?<=\]: [^\S\n]*(?:\S|\uFEFF)+ )(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')(?=(?: \{[^\n]*\})?[ \t]*$)/,
+            },
+        ],
     };
 
     // Footnote references: [^note]
@@ -838,6 +854,10 @@
         + '(?:(?:[-*] +)*[-*] +(?:\\[[ xX\\-_>?]\\] +)?'
         + '|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] +|\\. +)';
 
+    // The lookbehinds built from this prefix are variable length. The modes
+    // below check their sentinel before reading the prefix, so irrelevant
+    // positions do not make a long indentation run quadratic (#440).
+
     // A comment fence may open on a BLOCK-QUOTE marker line (`> %%%`), and then
     // its body is hidden exactly as it is anywhere else - \u00A724 S2 and \u00A728 make a
     // comment's body verbatim and invisible WHEREVER the fence sits. Corpus 70
@@ -872,7 +892,7 @@
         // guard an opener with no closer runs to end of file, and on this shape
         // an unclosed opener is the common case.
         begin: RegExp(
-            '(?<=' + QUOTE_MARKER_BEFORE_FENCE + ')(%{3,})(?!%)[^\\n]*$'
+            '(?=%)(?<=' + QUOTE_MARKER_BEFORE_FENCE + ')(%{3,})(?!%)[^\\n]*$'
             + '(?=' + QUOTE_MARKED_LINE + '*?\\n[ \\t]*(?:> )+\\1(?!%)[^\\n]*$)',
         ),
         'on:begin': (m, resp) => {
@@ -899,8 +919,8 @@
         className: 'comment',
         begin: RegExp(
             '(?:^(?:(?<![\\s\\S])\\uFEFF)?[ \\t]*'
-            + '|(?<=' + LIST_MARKER_BEFORE_BLOCK + ')'
-            + '|(?<=' + QUOTE_MARKER_BEFORE_FENCE + '))%{3,}',
+            + '|(?=%)(?<=' + LIST_MARKER_BEFORE_BLOCK + ')'
+            + '|(?=%)(?<=' + QUOTE_MARKER_BEFORE_FENCE + '))%{3,}',
         ),
         end: /$/,
         relevance: 5,
@@ -922,7 +942,7 @@
         // rest of the line carried no scope at all, where carve-js nests it
         // (carve-grammars#259).
         begin: RegExp(
-            '(?:^(?:(?<![\\s\\S])\\uFEFF)?[ \\t]*|(?<=' + LIST_MARKER_BEFORE_BLOCK + '))'
+            '(?:^(?:(?<![\\s\\S])\\uFEFF)?[ \\t]*|(?=>)(?<=' + LIST_MARKER_BEFORE_BLOCK + '))'
             + '>(?= |$)',
         ),
         end: /$/,
@@ -1328,7 +1348,10 @@
     //
     const DELIMITED_COMMENT = {
         className: 'comment',
-        begin: /\{%/,
+        // Opens only where its closer arrives in the paragraph: an unclosed
+        // `{%` is text, so it cannot swallow an enclosing closer
+        // (carve-grammars#461). Tempered like CRITIC_COMMENT's guard.
+        begin: /\{%(?=(?:[^%\n]|%(?!\})|\n(?![ \t\r]*\n)){0,4096}%\})/,
         end: /%\}/,
         relevance: 5,
     };
@@ -1443,7 +1466,7 @@
         // opener is the common case (a column-0 line ends the item), where the
         // right answer is a one-line comment, not a swallowed document.
         begin: RegExp(
-            '(?<=' + LIST_MARKER_BEFORE_BLOCK + ')(%{3,})(?!%)[^\\n]*$'
+            '(?=%)(?<=' + LIST_MARKER_BEFORE_BLOCK + ')(%{3,})(?!%)[^\\n]*$'
             + '(?=' + BLANK_OR_INDENTED_LINE + '*?\\n[ \\t]+\\1(?!%)[^\\n]*$)',
         ),
         'on:begin': (m, resp) => {
@@ -1457,17 +1480,11 @@
         },
         relevance: 10,
     };
+    // The deleted half is this mode's own text; the arrow starts the inserted
+    // half. Both hold inline content, given below once every mode exists.
     const CRITIC_SUB = {
-        className: 'meta',
-        // The `~>` arrow is what distinguishes a substitution from a forced
-        // strikethrough (`{~gone~}`), so it is required here.
-        //
-        // The arrow hunt is unrolled for the reason `paired()` above is:
-        // written `[^}\n]*~>` it scanned to end of line from every position and
-        // kept `{~` superlinear even after the guard was bounded (225 ms on
-        // 24 KB, x3.6 per doubling, carve-grammars#300). Tempered on a `~` that
-        // is not the arrow, it gives up at the next `~` instead.
-        begin: /\{~(?=[^~}\n]{0,4096}(?:~(?!>)[^~}\n]{0,4096}){0,32}~>)/,
+        className: 'deletion',
+        begin: new RegExp(`\\{~(?=${SUBSTITUTION_AHEAD})`),
         end: /~\}/,
         relevance: 10,
     };
@@ -1489,7 +1506,7 @@
         // The body still excludes `}` entirely, so the `#}` the guard finds is
         // the first one and `end` cannot overshoot it, and the scan stays
         // bounded at the 4096 carve-grammars#300 gave it.
-        begin: /\{#(?=(?:[^}\n]|\n(?![ \t\r]*\n)){0,4096}#\})/,
+        begin: /\{#(?!#\})(?=(?:[^#\n]|#(?!\})|\n(?![ \t\r]*\n)){0,4096}#\})(?:(?<![^\s\w"'][{]#)|(?![^}\n]{0,4096}(?<!#)[}]))(?=(?:[^#\n]|#(?!\})|\n(?![ \t\r]*\n)){0,4096}#\})/,
         end: /#\}/,
         relevance: 5,
     };
@@ -1590,6 +1607,107 @@
         relevance: 5,
     };
 
+    /*
+     * THE QUOTE DECIDES THE BRANCH, the technique Prism's `includeQuotedPart`
+     * already uses: a quote's two alternatives carry lookaheads that negate
+     * each other, so exactly one is ever viable at a given quote, and the
+     * ordinary class below excludes both quote characters so nothing else can
+     * claim one. The alternation therefore offers the engine no second path to
+     * re-enter - which is what keeps the scan linear, because as a plain
+     * alternation a `"` is both an opener and an ordinary character and a line
+     * with no closer makes the engine try both at every quote
+     * (scripts/scan-superlinear.mjs, the `unterminated, closer baits` row).
+     */
+    const includeQuotedPart = (quote) => {
+        const body = `(?:\\\\.|[^${quote}\\\\\\n])*`;
+        return `${quote}(?=${body}${quote})${body}${quote}|${quote}(?!${body}${quote})`;
+    };
+
+    /* One unit of a part, as Prism's `includePart`: a terminated run, a lone
+     * quote that opens none, or an ordinary character other than space or `}`. */
+    const INCLUDE_PART_UNIT =
+        `(?:${includeQuotedPart('"')}|${includeQuotedPart("'")}|[^\\s}"'])`;
+
+    /*
+     * Reserved processor syntax: `{{ path #section @key:value }}` (PART 9
+     * section 19, grammar.ebnf `include_directive`). The core leaves it
+     * literal; a processor expands it only when a host supplies a resolver.
+     *
+     * Enclosed in one owning mode because its own selector is spelled with other
+     * constructs: `#section` is TAG syntax and an option slot is MENTION
+     * syntax, so without this rule `{{ ch.crv #intro }}` coloured `#intro` as
+     * a hashtag - the same defect class as the cross-reference one CROSS_REF
+     * exists for (carve-grammars#307).
+     */
+    const INCLUDE_DIRECTIVE = {
+        className: 'meta',
+        // THE LOOKAHEAD IS THE CLOSER. A mode that opens on `{{` alone and ends
+        // at `}}` never ends when the closer is missing, and hljs then paints
+        // the rest of the DOCUMENT as directive - `illegal` does not abort it.
+        // Requiring the closer on the same line up front means an unterminated
+        // `{{` simply never opens the mode, which is what the processor does
+        // with it too: leave it as text.
+        //
+        // AND THE CLOSER IS THE FIRST `}}` OUTSIDE A QUOTED RUN
+        // (markup-carve/carve#2013), so the lookahead has to READ what lies
+        // between rather than ask whether SOME pair is on the line. Once a run
+        // may hold the pair, a line whose only pair sits inside a terminated
+        // one has no closer at all: `[^\n]*?\}\}` said yes there, the mode
+        // opened, `end` never fired, and `|$` was all that kept the damage to a
+        // single line (carve-grammars#418). TextMate and Prism read such a line
+        // as no directive, their outer pattern needing a closer it cannot find,
+        // and this is what lets highlight.js reach the same reading
+        // (sublime-carve#47, which closed the same gap on the same technique).
+        //
+        // The lookahead is Prism's outer pattern, so a path is required and no
+        // part holds an unquoted `}` (#434). `end` keeps `|$` as the line bound.
+        begin: RegExp(
+            `\\{\\{(?=[ \\t]+(?:"(?:\\\\.|[^"\\\\\\n])*"|[^#@}\\s"][^#@}\\s]*)`
+            + `(?:#[A-Za-z_][\\w-]*)?(?:[ \\t]+${INCLUDE_PART_UNIT}+)*[ \\t]+\\}\\})`,
+        ),
+        end: /\}\}|$/,
+        relevance: 10,
+        // BY PART. The mode's own boundaries are what keep TAG and MENTION out
+        // of the directive, so painting the run one colour buys nothing - and a
+        // reader wants the path to look like a path. `end` closes the mode, so
+        // an unterminated `{{` reverts to ordinary text at the line end rather
+        // than swallowing the rest of the document.
+        contains: [
+            {
+                className: 'string',
+                begin: /(?=[^#@}\s])(?<=\{\{[ \t]+)(?:"(?:\\.|[^"\\\n])*"|[^#@}\s"][^#@}\s]*)/,
+            },
+            {
+                className: 'symbol',
+                begin: /#[A-Za-z_][\w-]*/,
+            },
+            {
+                // NOT `attr`: that class is this grammar's attribute BLOCK
+                // (`{#id .cls}`), and the engine sweep reads any `attr`-ish
+                // scope on a non-attribute construct as a misreading. An option
+                // name is a reserved word in a slot, which is what `keyword` is.
+                className: 'keyword',
+                begin: /(?<=\s)@[A-Za-z_][\w-]*/,
+            },
+            {
+                // An `attribute_value`, so it may be quoted and then carries
+                // spaces. The quoted alternatives exclude the newline, as
+                // `quoted_value` does [CARVE-P4-006]: one that did not paired
+                // with a quote lines away, ate the `}}` on the way, and left
+                // the mode painting the rest of the line (carve-grammars#409).
+                // They ADMIT the `}}` pair, which is what puts the closer
+                // outside the quoted run (markup-carve/carve#2013, superseding
+                // the `\}(?!\})` bound of carve-grammars#413): `end` is scanned
+                // alongside the contained modes and the earliest match wins, so
+                // consuming the run here is what stops `end` firing inside it.
+                // The unquoted alternative is LAST, so an unterminated quote
+                // falls back to it and the closer stays at the first pair.
+                className: 'literal',
+                begin: /(?<=:)(?:"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|[^\s}]+)/,
+            },
+        ],
+    };
+
     // Raw format marker: {=html} or {=latex}
     const RAW_FORMAT = {
         className: 'meta',
@@ -1636,9 +1754,86 @@
     // targeted scope as the TextMate and Prism fixes for this same bug.
     HEADING.contains = [HEADING_TAG];
 
+    const substitutionContent = (boundary, openCode) => [
+        ESCAPE, CRITIC_COMMENT, DELIMITED_COMMENT, MATH_DISPLAY, MATH_INLINE, LITERAL_INLINE,
+        ...openCode, INLINE_CODE, IMAGE, REFERENCE_IMAGE, INLINE_FOOTNOTE, FOOTNOTE_REF, SPAN,
+        REFERENCE_LINK, LINK, AUTOLINK, EMAIL_AUTOLINK, MENTION, CROSS_REF, TAG, INSERT, DELETE,
+        FORCED_STRONG, FORCED_EMPHASIS, FORCED_UNDERLINE, FORCED_STRIKE, FORCED_HIGHLIGHT,
+        // An emphasis opener whose closer lies only past the boundary is text.
+        { begin: new RegExp(`([*/_=])(?!(?:(?!${boundary}).){0,4096}?\\1)`), relevance: 0 },
+        HIGHLIGHT, SUBSCRIPT, SUPERSCRIPT, BOLD_ITALIC, STRONG, EMPHASIS, UNDERLINE, TYPOGRAPHY,
+    ];
+    // A bare run holds inline content. Inside it, a same-kind forced opener is
+    // text, and so is a bare opener whose closer lies only past this run's.
+    // Once a highlight is open its closer beats smart typography (`x =y z<= w`).
+    // A link whose label the LINK mode cannot read, or an autolink, is still
+    // opaque to a bare closer.
+    const OPAQUE_DESTINATION = { begin: new RegExp(OPAQUE_INLINE_SOURCE.replace(OPAQUE_BRACED_SOURCE + '|', '')), relevance: 0 };
+    const bareContent = (d, own) => [
+        ESCAPE, CRITIC_COMMENT, DELIMITED_COMMENT,
+        { begin: new RegExp(`\\{${d}`), relevance: 0 },
+        ...substitutionContent('(?!)', []).slice(3).filter((mode) => mode !== own
+            && !(d === '=' && mode === TYPOGRAPHY)
+            && mode.begin?.source !== '([*/_=])(?!(?:(?!(?!)).){0,4096}?\\1)'),
+        OPAQUE_DESTINATION,
+    ];
+    for (const [d, mode] of [['\\*', STRONG], ['/', EMPHASIS], ['_', UNDERLINE], ['~', STRIKETHROUGH], ['=', HIGHLIGHT]]) {
+        const others = ['*', '/', '_', '~', '='].filter((c) => `\\${c}` !== d && c !== d).map((c) => (c === '*' ? '\\*' : c)).join('');
+        const crossing = {
+            begin: new RegExp(`([${others}])(?=[^\\n]*?${bareCloser('\\1')})(?=(?:(?!${bareCloser('\\1')})[^\\n])*?${bareCloser(d)})`),
+            relevance: 0,
+        };
+        const content = bareContent(d, mode);
+        const at = content.findIndex((m) => m === HIGHLIGHT || m === STRONG || m === EMPHASIS);
+        content.splice(at, 0, crossing);
+        mode.contains = [{ begin: new RegExp(`\\s${d}`), relevance: 0 }, DELIMITED_COMMENT, ...content];
+    }
+
+    // A braced span holds inline content. Its own delimiter is text inside it,
+    // a code span still open at its closer ends there, and a bare opener whose
+    // closer lies only past the span's closer is text.
+    for (const [d, mode, own] of [
+        ['\\*', FORCED_STRONG, [STRONG]], ['/', FORCED_EMPHASIS, [EMPHASIS]], ['_', FORCED_UNDERLINE, [UNDERLINE]],
+        ['~', FORCED_STRIKE, [STRIKETHROUGH]], ['=', FORCED_HIGHLIGHT, [HIGHLIGHT]], ['\\^', SUPERSCRIPT, []],
+        [',', SUBSCRIPT, []], ['\\+', INSERT, []], ['-', DELETE, []],
+    ]) {
+        const closer = `${d}\\}`;
+        // An insertion or deletion has no atoms: a braced opener whose own
+        // closer lies only past this one is text.
+        const unscoped = mode === INSERT || mode === DELETE
+            ? [{ begin: new RegExp(`\\{([*/_~=^,+-])(?=(?:(?!\\1\\})[^\\n]){0,4096}?${closer})`), relevance: 0 }]
+            : [];
+        mode.contains = [
+            ESCAPE, CRITIC_COMMENT, DELIMITED_COMMENT, ...unscoped,
+            { begin: new RegExp(`${d}(?!\\})`), relevance: 0 },
+            { className: 'code', begin: /(?:\$\$?|!)?`+(?![^`\n]{0,4096}`)/, end: new RegExp(`(?=${closer})`) },
+            CRITIC_SUB,
+            {
+                begin: new RegExp(`([${['\\*', '/', '_', '~', '='].filter((c) => c !== d).join('')}])(?=[^\\n]*?${bareCloser('\\1')})(?=(?:(?!${bareCloser('\\1')})[^\\n])*?${closer})`),
+                relevance: 0,
+            },
+            ...substitutionContent('(?!)', []).slice(3).filter((m) => m !== mode && !own.includes(m)
+                && m.begin?.source !== '([*/_=])(?!(?:(?!(?!)).){0,4096}?\\1)'),
+            OPAQUE_DESTINATION,
+        ];
+    }
+
+    CRITIC_SUB.contains = [
+        {
+            className: 'punctuation',
+            begin: /~>/,
+            starts: {
+                className: 'addition',
+                end: /(?=~\})/,
+                contains: substitutionContent('~\\}', [{ className: 'code', begin: /`+(?![^`\n]{0,4096}`)/, end: /(?=~\})/ }]),
+            },
+        },
+        ...substitutionContent('~>', []),
+    ];
+
     const CONTAINS = [
         // Block-level elements (order matters - more specific first)
-        FRONT_MATTER,
+        ...FRONT_MATTER,
         HEADING,
         CODE_BLOCK,        // ``` ... ``` - before the delimiter-only fallback
         RAW_BLOCK,         // ```=html ... ``` - same, with the raw info string
@@ -1674,6 +1869,7 @@
         LINK,
         AUTOLINK,
         EMAIL_AUTOLINK,
+        INCLUDE_DIRECTIVE, // {{ path }} - before MENTION/TAG, which claim its selector
         RAW_FORMAT,        // {=html} - must be before INSERT/DELETE braces
         INSERT,            // {+text+}
         DELETE,            // {-text-}
