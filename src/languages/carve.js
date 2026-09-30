@@ -1,6 +1,6 @@
 // GENERATED FILE - DO NOT EDIT.
 //
-// Vendored verbatim from @markup-carve/carve-grammars@0.1.9
+// Vendored verbatim from @markup-carve/carve-grammars@0.1.11
 // (highlightjs/carve.js) by scripts/sync.mjs. Edit the definition there,
 // release carve-grammars, then run: npm run sync
 /**
@@ -633,6 +633,16 @@
 
     // Inline code: `code`, ``code``, or any wider fence.
     const INLINE_CODE = verbatimFence({ className: 'code', relevance: 0 });
+    // A table cell can carry an open run onto a continuation row, but not
+    // onto an unrelated line. Keep the dynamic-width closer from INLINE_CODE.
+    const TABLE_INLINE_CODE = {
+        ...INLINE_CODE,
+        end: /(?<!`)`+(?!`)|(?=\n(?![ \t]*\+(?:\\.|[^\\\n])*\|[ \t]*$))/,
+        'on:end': (match, response) => {
+            if (match[0] === '') return;
+            INLINE_CODE['on:end'](match, response);
+        },
+    };
 
     // Inline links: [text](url) with optional trailing attributes
     const LINK = {
@@ -769,7 +779,19 @@
     // so `one + two` in prose stays literal.
     const TABLE_CONTINUATION = {
         className: 'punctuation',
-        begin: /^(?:(?<![\s\S])\uFEFF)?[ \t]*\+(?:[ \t]*$|[^\n]*\|[ \t]*$)/,
+        begin: /^(?:(?<![\s\S])\uFEFF)?[ \t]*\+[ \t]*$/,
+        relevance: 5,
+    };
+    const TABLE_CONTINUATION_ROW = {
+        begin: /^(?:(?<![\s\S])\uFEFF)?[ \t]*(?=\+(?:\\.|[^\\\n])*\|[ \t]*$)/,
+        end: /\|[ \t]*$|(?=\n(?![ \t]*\+(?:\\.|[^\\\n])*\|[ \t]*$))/,
+        endScope: 'table-boundary',
+        contains: [
+            { className: 'table-operator', begin: /\+(?=(?:\\.|[^\\\n])*\|[ \t]*$)/ },
+            TABLE_INLINE_CODE,
+            ESCAPE,
+            { className: 'table-boundary', begin: /\|(?=[^\n]*\|)/ },
+        ],
         relevance: 5,
     };
 
@@ -1561,14 +1583,20 @@
 
     // Table separator: |---|---|
     const TABLE_SEPARATOR = {
-        className: 'meta',
-        begin: /^(?:(?<![\s\S])\uFEFF)?[ \t]*\|[-:| ]+\|$/,
+        begin: /^(?:(?<![\s\S])\uFEFF)?[ \t]*\|(?=[-:| ]+\|[ \t]*$)/,
+        beginScope: 'table-boundary',
+        end: [/\|/, /[ \t]*$/],
+        endScope: { 1: 'table-boundary' },
         relevance: 5,
+        contains: [
+            { className: 'table-operator', begin: /:?-+:?/ },
+            { className: 'table-boundary', begin: /\|(?=[^\n]*\|)/ },
+        ],
     };
 
     /*
-     * A PIPE-LED LINE THAT IS NOT A TABLE ROW, which is what this mode has
-     * always matched and not what it was called.
+     * A PIPE-LED LINE THAT IS NOT A TABLE ROW. TABLE_ROW runs first and claims
+     * lines with a closing pipe; this fallback only claims incomplete rows.
      *
      * It was named LINE_BLOCK, and the ledger cited it as the rule for
      * `line_block`. It is not: a line block opens on a COLON FENCE
@@ -1577,9 +1605,9 @@
      * line at document level is neither - the engine renders it as a paragraph.
      *
      * The mode still earns its place, for the reason its old comment gave:
-     * TABLE_ROW closes on a line-final `|`, so on a single-pipe line it would
-     * open and run until some later line happened to end in one. This claims
-     * the line first and ends it at the newline. The rename is what stops the
+     * TABLE_ROW closes on a line-final `|`, so its opener must check for that
+     * closer before claiming a line. This fallback scopes an unclosed pipe-led
+     * line and ends it at the newline. The rename is what stops the
      * ledger reading a guard against that runaway as a construct's rule -
      * evidence names a rule the vocabulary declares, and nothing checks that
      * the named rule is about the construct.
@@ -1592,12 +1620,34 @@
     };
 
     // Table rows: | cell | cell |
-    const TABLE_ROW = {
-        className: 'string',
-        begin: /^(?:(?<![\s\S])\uFEFF)?[ \t]*\|/,
-        end: /\|(\{[^}]*\})?$/,
+    const tableRow = (header) => ({
+        begin: header
+            ? /^(?:(?<![\s\S])\uFEFF)?[ \t]*\|=(?:[<~>][\^~v]?|\?[\^~v])?(?= |\{)(?=(?:\\.|[^\\\n])*\|(?:\{[^}\n]*\})?[ \t]*$)/
+            : /^(?:(?<![\s\S])\uFEFF)?[ \t]*\|(?=(?:\\.|[^\\\n])*\|(?:\{[^}\n]*\})?[ \t]*$)/,
+        beginScope: header ? 'table-operator' : 'table-boundary',
+        end: [/\||(?=\n(?![ \t]*\+(?:\\.|[^\\\n])*\|[ \t]*$))/, /(?:\{[^}\n]*\})?/, /[ \t]*$/],
+        endScope: { 1: 'table-boundary', 2: 'meta' },
+        contains: [
+            TABLE_INLINE_CODE,
+            ESCAPE,
+            /*
+             * A CELL IS AN INLINE RUN, so a trailing `%%` comment is a comment
+             * here and its run ENDS AT THE CELL (`CARVE-P9-041`, corpus
+             * `518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator-6`).
+             * Without this the cell text carried no comment scope at all
+             * (carve-grammars#577) - the document-level comment rule never
+             * reaches inside this mode.
+             */
+            { className: 'comment', begin: /(?<=[ \t])%{2,}(?:\\.|[^\\|\r\n])*/ },
+            { className: 'table-operator', begin: /\|=(?= |\{)/ },
+            { className: 'table-operator', begin: /(?<=\|)[ \t]*[<^](?=[ \t]*\|)/ },
+            { className: 'table-operator', begin: /(?<=\|)[=]?(?:[<~>](?:[\^~v])?|\?[\^~v])(?= |\{)/ },
+            { className: 'table-boundary', begin: /\|(?!(?:\{[^}\n]*\})?[ \t]*$)(?=[^\n]*\|(?:\{[^}\n]*\})?[ \t]*$)/ },
+        ],
         relevance: 2,
-    };
+    });
+    const TABLE_HEADER_ROW = tableRow(true);
+    const TABLE_ROW = tableRow(false);
 
     // Captions: ^ caption text
     const CAPTION = {
@@ -1842,9 +1892,11 @@
         DIV_BLOCK,
         HORIZONTAL_RULE,
         TABLE_SEPARATOR,
-        TABLE_CONTINUATION,  // `+` rows - before TABLE_ROW, which needs a leading `|`
-        PIPE_LED_LINE,     // Must be before TABLE_ROW (both start with |)
+        TABLE_CONTINUATION,
+        TABLE_CONTINUATION_ROW,
+        TABLE_HEADER_ROW,
         TABLE_ROW,
+        PIPE_LED_LINE,
         BLOCKQUOTE,
         CAPTION,
         TASK_LIST,         // Must be before LIST_BULLET
