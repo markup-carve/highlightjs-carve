@@ -5,7 +5,7 @@
 [Carve](https://markup-carve.github.io/carve/) language definition for
 [highlight.js](https://highlightjs.org/).
 
-Carve is a post-Markdown markup language whose inline delimiters deliberately
+Carve is a lightweight markup language whose inline delimiters deliberately
 differ from Markdown's: emphasis is `/italic/`, strong is `*bold*`, `_x_` is
 underline, `~x~` is strikethrough, and sup/sub are braced (`{^x^}`, `{,x,}`). A
 Markdown grammar therefore highlights a Carve document wrongly rather than not
