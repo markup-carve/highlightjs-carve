@@ -18,7 +18,7 @@
   "scripts": {
     "sync": "node scripts/sync.mjs",
     "drift:upstream": "node test/upstream-drift.mjs",
-    "test": "node test/registration-test.mjs && node test/drift-test.mjs && node test/coverage-test.mjs"
+    "test": "node test/registration-test.mjs && node test/drift-test.mjs && node test/coverage-test.mjs && node test/heading-caption-test.mjs"
   },
   "keywords": [
     "carve",
@@ -45,7 +45,7 @@
     "highlight.js": "^11"
   },
   "devDependencies": {
-    "@markup-carve/carve-grammars": "^0.1.9",
+    "@markup-carve/carve-grammars": "github:markup-carve/carve-grammars#a1f778a0058132afcc963c1530349d5db932e00d",
     "highlight.js": "^11.11.1"
   },
   "publishConfig": {
