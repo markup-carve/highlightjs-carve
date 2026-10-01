@@ -25,7 +25,7 @@ try {
     const at = (vendored.match(/carve-grammars@(\S+)/) ?? vendored.match(/Source revision: (\S+)/) ?? [])[1] ?? 'unknown'
 
     if (vendored !== published) {
-        console.error(`src/languages/carve.js (vendored from ${pkg}@${at}) differs from the latest published ${pkg}@${latest}.`)
+        console.error(`src/languages/carve.js (vendored from ${pkg}, source ${at}) differs from the latest published ${pkg}@${latest}.`)
         console.error(`Raise the devDependency to ^${latest}, run npm install and npm run sync.`)
         process.exitCode = 1
     } else {
