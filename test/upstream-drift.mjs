@@ -22,7 +22,7 @@ try {
     execFileSync('tar', ['-xzf', join(dir, tarball), '-C', dir, 'package/highlightjs/carve.js'])
     const published = render(readFileSync(join(dir, 'package/highlightjs/carve.js'), 'utf8'), latest)
     const vendored = readFileSync(new URL('../src/languages/carve.js', import.meta.url), 'utf8')
-    const at = (vendored.match(/carve-grammars@(\S+)/) ?? [])[1] ?? 'unknown'
+    const at = (vendored.match(/carve-grammars@(\S+)/) ?? vendored.match(/Source revision: (\S+)/) ?? [])[1] ?? 'unknown'
 
     if (vendored !== published) {
         console.error(`src/languages/carve.js (vendored from ${pkg}@${at}) differs from the latest published ${pkg}@${latest}.`)
