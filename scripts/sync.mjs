@@ -56,10 +56,11 @@ export function render(source = readFileSync(grammarFile(), 'utf8'), version = u
     const header = [
         '// GENERATED FILE - DO NOT EDIT.',
         '//',
-        '// Vendored verbatim from @markup-carve/carve-grammars@' + version,
-        ...(revision ? ['// Source revision: ' + revision] : []),
+        '// Vendored verbatim from @markup-carve/carve-grammars'
+            + (revision ? ' (unreleased source)' : '@' + version),
         '// (highlightjs/carve.js) by scripts/sync.mjs. Edit the definition there,',
         '// release carve-grammars, then run: npm run sync',
+        ...(revision ? ['// Source revision: ' + revision, '// Upstream package version: ' + version] : []),
         '',
     ].join('\n')
     return header + source

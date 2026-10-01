@@ -1,9 +1,10 @@
 // GENERATED FILE - DO NOT EDIT.
 //
-// Vendored verbatim from @markup-carve/carve-grammars@0.1.11
-// Source revision: a1f778a0058132afcc963c1530349d5db932e00d
+// Vendored verbatim from @markup-carve/carve-grammars (unreleased source)
 // (highlightjs/carve.js) by scripts/sync.mjs. Edit the definition there,
 // release carve-grammars, then run: npm run sync
+// Source revision: a9ea2fe2a3c13993cd901eb85189b3b6fd83fe72
+// Upstream package version: 0.1.11
 /**
  * Carve language definition for highlight.js
  *
