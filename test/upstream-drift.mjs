@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { render } from '../scripts/sync.mjs'
+import { render, upstreamVersion } from '../scripts/sync.mjs'
 
 const pkg = '@markup-carve/carve-grammars'
 const npm = (...args) => execFileSync('npm', args, { encoding: 'utf8' }).trim()
@@ -20,7 +20,7 @@ const dir = mkdtempSync(join(tmpdir(), 'carve-grammars-'))
 try {
     const tarball = npm('pack', pkg + '@' + latest, '--silent', '--pack-destination', dir)
     execFileSync('tar', ['-xzf', join(dir, tarball), '-C', dir, 'package/highlightjs/carve.js'])
-    const published = render(readFileSync(join(dir, 'package/highlightjs/carve.js'), 'utf8'), latest)
+    const published = render(readFileSync(join(dir, 'package/highlightjs/carve.js'), 'utf8'), upstreamVersion())
     const vendored = readFileSync(new URL('../src/languages/carve.js', import.meta.url), 'utf8')
     const at = (vendored.match(/carve-grammars@(\S+)/) ?? vendored.match(/Source revision: (\S+)/) ?? [])[1] ?? 'unknown'
 
