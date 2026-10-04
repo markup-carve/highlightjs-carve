@@ -43,7 +43,7 @@ jobs:
         run: DRIFT_REPORT="$GITHUB_OUTPUT" npm run drift:upstream
 
       - name: Open or update the re-vendor pull request
-        if: steps.drift.outputs.behind == '1'
+        if: steps.drift.outputs.behind == '1' && github.ref_name == github.event.repository.default_branch
         env:
           GH_TOKEN: ${{ secrets.BUMP_TOKEN }}
           REPO: ${{ github.repository }}
@@ -60,12 +60,14 @@ jobs:
           remote="https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
           range="^${LATEST}"
 
-          # An open pull request already carrying this release needs nothing;
-          # pushing again would only restart its CI.
-          if git ls-remote --exit-code "${remote}" "refs/heads/${branch}" >/dev/null; then
+          # An OPEN pull request already carrying this release needs nothing;
+          # pushing again would only restart its CI. A branch without an open
+          # pull request (closed, or a create that failed) is pushed again.
+          open_pr="$(gh pr list --repo "${REPO}" --head "${branch}" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "${open_pr}" ]; then
             git fetch -q "${remote}" "${branch}"
             if git show FETCH_HEAD:package.json | grep -qF "\"@markup-carve/carve-grammars\": \"${range}\""; then
-              echo "${branch} already vendors ${LATEST}; nothing to do."
+              echo "#${open_pr} already vendors ${LATEST}; nothing to do."
               exit 0
             fi
           fi
