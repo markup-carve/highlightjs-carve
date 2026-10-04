@@ -3,7 +3,13 @@ name: Upstream drift
 # CI compares the vendored definition against the INSTALLED carve-grammars,
 # which the lockfile holds still. This compares it against the latest
 # published release, so a new carve-grammars shows up here within a day.
-# It fails rather than warns: the fix is a one-line re-vendor PR.
+#
+# Upstream releasing is work, not a failure of this repo (carve#2706), so a
+# vendored copy behind the release opens or updates one re-vendor pull request
+# and the run stays green. A source pin ahead of the release is not drift. The
+# run goes red only when the check cannot do its job: a pin that diverged from
+# the release, a missing BUMP_TOKEN, or a failed push. BUMP_TOKEN is a
+# fine-grained PAT, because a pull request the default token opens runs no CI.
 
 on:
   schedule:
@@ -13,6 +19,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: upstream-drift
+  cancel-in-progress: false
+
 # Every job below carries a timeout-minutes bound. Without one a job inherits
 # GitHub's 360-minute default, and a stalled step can burn hours unnoticed.
 jobs:
@@ -21,9 +31,72 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - run: npm run drift:upstream
+      - name: Compare the vendored definition against the latest release
+        id: drift
+        run: DRIFT_REPORT="$GITHUB_OUTPUT" npm run drift:upstream
+
+      - name: Open or update the re-vendor pull request
+        if: steps.drift.outputs.behind == '1' && github.ref_name == github.event.repository.default_branch
+        env:
+          GH_TOKEN: ${{ secrets.BUMP_TOKEN }}
+          REPO: ${{ github.repository }}
+          OLD: ${{ steps.drift.outputs.current }}
+          LATEST: ${{ steps.drift.outputs.latest }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::error::BUMP_TOKEN is not set, so the drift job cannot open the re-vendor pull request"
+            exit 1
+          fi
+          branch=automation/revendor-definition
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          range="^${LATEST}"
+
+          # An OPEN pull request already carrying this release needs nothing;
+          # pushing again would only restart its CI. A branch without an open
+          # pull request (closed, or a create that failed) is pushed again.
+          open_pr="$(gh pr list --repo "${REPO}" --head "${branch}" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "${open_pr}" ]; then
+            git fetch -q "${remote}" "${branch}"
+            if git show FETCH_HEAD:package.json | grep -qF "\"@markup-carve/carve-grammars\": \"${range}\""; then
+              echo "#${open_pr} already vendors ${LATEST}; nothing to do."
+              exit 0
+            fi
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q -B "${branch}"
+          # A plain npm install keeps a lockfile entry that still satisfies the range.
+          npm install --save-dev --no-audit --no-fund "@markup-carve/carve-grammars@${range}"
+          npm run sync
+          git add package.json package-lock.json src/languages/carve.js
+          git commit -q -m "chore: re-vendor the definition from carve-grammars ${LATEST}"
+          git push -q --force "${remote}" "${branch}"
+
+          {
+            echo "Re-vendors \`src/languages/carve.js\` from \`@markup-carve/carve-grammars\` ${LATEST}, the latest published release, and moves the devDependency from \`${OLD}\` to \`${range}\` with the lockfile."
+            echo
+            echo "Opened by the scheduled upstream-drift job. CI re-runs \`npm run sync\` against the installed release and runs \`npm test\`, which checks the vendored file and the highlighting probes against it."
+            echo
+            echo "Upstream changes: https://github.com/markup-carve/carve-grammars/releases/tag/v${LATEST}"
+          } > "${RUNNER_TEMP}/body.md"
+
+          pr="$(gh pr list --repo "${REPO}" --head "${branch}" --state open --json number --jq '.[0].number // empty')"
+          title="chore: re-vendor the definition from carve-grammars ${LATEST}"
+          if [ -n "${pr}" ]; then
+            gh pr edit "${pr}" --repo "${REPO}" --title "${title}" --body-file "${RUNNER_TEMP}/body.md"
+            echo "Updated #${pr}."
+          else
+            gh pr create --repo "${REPO}" --base "${BASE}" --head "${branch}" \
+              --title "${title}" --body-file "${RUNNER_TEMP}/body.md" \
+              --label chore --label area:grammar --label area:editor
+          fi
