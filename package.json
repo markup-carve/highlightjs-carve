@@ -1,6 +1,6 @@
 {
   "name": "highlightjs-carve",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Carve markup language definition for highlight.js",
   "type": "module",
   "main": "src/index.js",
