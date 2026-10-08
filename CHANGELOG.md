@@ -4,6 +4,29 @@ All notable changes to highlightjs-carve are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+## [0.1.2] - 2026-10-08
+
+### Changed
+
+- The Carve definition is vendored from carve-grammars 0.1.11 instead of 0.1.9.
+  The devDependency range already allowed it, but the lockfile pinned 0.1.9, so
+  neither `npm install` nor `npm ci` moved it. markup-carve/highlightjs-carve#11
+
+### Fixed
+
+These come with the new definition:
+
+- A table row needs a closing pipe in its opener; a continuation row and the
+  separator row get their own modes, and an inline code run inside a cell
+  carries across a continuation row rather than to any later line.
+  markup-carve/highlightjs-carve#11
+- A comment in a heading or a caption ends where the engine ends it, so a code
+  span keeps its percent runs and a trailing comment keeps its scope.
+  Display math and quote continuation boundaries are covered too.
+  markup-carve/highlightjs-carve#13
+
 ## [0.1.1] - 2026-09-21
 
 ### Changed
