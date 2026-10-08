@@ -26,6 +26,10 @@ These come with the new definition:
   span keeps its percent runs and a trailing comment keeps its scope.
   Display math and quote continuation boundaries are covered too.
   markup-carve/highlightjs-carve#13
+- An include option recognizes its marker with no space in front of it, so a
+  directive that glues the option or the section onto the path still opens as a
+  directive, and an unquoted option value stops at the next option marker
+  instead of swallowing it. markup-carve/highlightjs-carve#19
 
 ## [0.1.1] - 2026-09-21
 
