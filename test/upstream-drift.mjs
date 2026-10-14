@@ -10,6 +10,10 @@
  * latest release; that is not drift, so the pin is checked for ancestry first.
  * With DRIFT_REPORT set the result goes to that file and only an unanswerable
  * comparison exits non-zero; without it, being behind exits non-zero.
+ *
+ * The release check alone let the copy fall 40 commits behind carve-grammars
+ * main, including a fix for exponential backtracking. So the vendored file is
+ * also compared with highlightjs/carve.js on main, reported as behind_main.
  */
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -37,11 +41,30 @@ function report(behind, note) {
     }
 }
 
+/** The vendored file is the sync header (comment lines) followed by main's definition verbatim. */
+function reportMain(repo) {
+    const head = run('git', '-C', repo, 'rev-parse', 'HEAD')
+    const main = execFileSync('git', ['-C', repo, 'show', 'HEAD:highlightjs/carve.js'], { encoding: 'utf8' })
+    const vendored = readFileSync(new URL('../src/languages/carve.js', import.meta.url), 'utf8')
+    const header = vendored.endsWith(main) ? vendored.slice(0, -main.length) : null
+    const behind = header !== null && header.split('\n').every((line) => line === '' || line.startsWith('//')) ? 0 : 1
+    console.log(behind
+        ? `src/languages/carve.js differs from highlightjs/carve.js on ${pkg} main (${head}).`
+        : `  ok vendored definition matches ${pkg} main (${head})`)
+    if (process.env.DRIFT_REPORT) {
+        appendFileSync(process.env.DRIFT_REPORT, `behind_main=${behind}\nmain=${head}\n`)
+    } else if (behind) {
+        console.error(`Pin ${pkg} to github:markup-carve/carve-grammars#${head} and run npm run sync.`)
+        process.exitCode = 1
+    }
+}
+
 try {
+    const repo = join(dir, 'repo')
+    run('git', 'clone', '-q', '--filter=blob:none', '--no-checkout', source, repo)
+    reportMain(repo)
     if (revision) {
         const released = run('npm', 'view', pkg + '@' + latest, 'gitHead')
-        const repo = join(dir, 'repo')
-        run('git', 'clone', '-q', '--filter=blob:none', '--no-checkout', source, repo)
         const isAncestor = (a, b) => {
             try {
                 execFileSync('git', ['-C', repo, 'merge-base', '--is-ancestor', a, b])

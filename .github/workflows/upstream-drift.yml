@@ -2,7 +2,8 @@ name: Upstream drift
 
 # CI compares the vendored definition against the INSTALLED carve-grammars,
 # which the lockfile holds still. This compares it against the latest
-# published release, so a new carve-grammars shows up here within a day.
+# published release, so a new carve-grammars shows up here within a day, and
+# against carve-grammars main, so unreleased grammar fixes show up as a warning.
 #
 # Upstream releasing is work, not a failure of this repo (carve#2706), so a
 # vendored copy behind the release opens or updates one re-vendor pull request
@@ -41,6 +42,17 @@ jobs:
       - name: Compare the vendored definition against the latest release
         id: drift
         run: DRIFT_REPORT="$GITHUB_OUTPUT" npm run drift:upstream
+
+      # Releases lag main, so a copy can match the release and still miss grammar
+      # fixes. Reported, not failed: re-vendoring from main is a maintainer call.
+      - name: Report drift from carve-grammars main
+        if: steps.drift.outputs.behind_main == '1'
+        env:
+          MAIN: ${{ steps.drift.outputs.main }}
+        run: |
+          msg="src/languages/carve.js differs from highlightjs/carve.js on carve-grammars main (${MAIN}). Pin the devDependency to that commit and run npm run sync."
+          echo "::warning::${msg}"
+          echo "${msg}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Open or update the re-vendor pull request
         id: revendor
