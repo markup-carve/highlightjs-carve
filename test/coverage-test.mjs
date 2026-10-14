@@ -118,6 +118,8 @@ const NEGATIVES = {
   'a term marker with no content is not a term': [':: \n', ':: '],
   // carve 0.1.11: `^ Figure 1` with no block above renders <p>^ Figure 1</p>.
   'a caption line with no block above is a paragraph': ['^ Figure 1', '^ Figure 1'],
+  // carve 0.1.11 renders `x\]{.c} y` as <p>x]{.c} y</p>: an escaped closer takes no attribute.
+  'an escaped closer takes no attribute block': ['x\\]{.c} y', '{.c}'],
 }
 for (const [label, [source, text]] of Object.entries(NEGATIVES)) {
   check(label, !paints(source, text))
@@ -131,9 +133,24 @@ console.log('\ncontext-sensitive rulings')
 // marker is syntax, the text is plain paragraph content, as in a list item.
 check('a description marker scopes', highlight(':: t\n:  real content\n').split('\n')[1].startsWith('<span'))
 check('description text stays plain', !paints(':: t\n:  real content\n', 'real content'))
-// carve 0.1.11 renders `: {empty}` as an empty <dd></dd>; the marker opens it.
+// carve 0.1.11 renders `: {empty}` as an empty <dd></dd>: the marker opens it
+// and `{empty}` is a block attribute, not text.
 check('an {empty} description marker scopes', highlight(':: t\n: {empty}\n').split('\n')[1].startsWith('<span'))
+check('an {empty} description body is an attribute', highlight(':: t\n: {empty}\n').includes('<span class="hljs-attr">{empty}</span>'))
+// carve 0.1.11 renders `[^n]: some *strong* text` with <strong> inside the note.
+check('a footnote definition body highlights inline', highlight('x[^n]\n\n[^n]: some *strong* text\n').includes('<span class="hljs-strong">*strong*</span>'))
+check('an {empty} footnote body is an attribute', highlight('[^n]: {empty}\n').includes('<span class="hljs-attr">{empty}</span>'))
+// carve 0.1.11 renders an unclosed fence as code to the end of the document...
+const unclosed = highlight('```\ncode *a*\nmore')
+check('an unclosed fence runs to the end as code', unclosed.startsWith('<span class="hljs-code">') && !unclosed.includes('hljs-strong') && unclosed.endsWith('more</span>'))
+// ...or to its container's closer: the paragraph after the aside is inline again.
+const contained = highlight('::: note\n```\ncode *x*\n:::\n\nafter *b*\n')
+check('an unclosed fence ends at its container closer', !paints('::: note\n```\ncode *x*\n:::\n\nafter *b*\n', 'after') && contained.includes('<span class="hljs-strong">*b*</span>') && !contained.includes('<span class="hljs-strong">*x*</span>'))
+// A closed fence past the paired rules' lookahead is still closed, not unclosed:
+// carve 0.1.11 renders the text after its closer as a paragraph with <strong>.
+const longFence = highlight('```\n' + 'x'.repeat(33000) + '\n```\n\n*after*\n')
+check('a closed fence over 32 KB ends at its closer', longFence.includes('<span class="hljs-strong">*after*</span>'))
 
 console.log('')
 assert.strictEqual(failures, 0, failures + ' coverage check(s) failed')
-console.log(Object.keys(CONSTRUCTS).length + Object.keys(NEGATIVES).length + 3 + ' passed')
+console.log(Object.keys(CONSTRUCTS).length + Object.keys(NEGATIVES).length + 8 + ' passed')
