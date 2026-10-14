@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Highlighting no longer takes exponential time on repeated unclosed delimiters
+  such as `*a *a *a ...`; 0.1.2 did not finish 75 bytes of them in a minute.
+  The definition is vendored from carve-grammars main (2583b07e), which also
+  brings its block-context, caption, table-cell, link-label, definition-term and
+  fence-language fixes.
+
 ## [0.1.2] - 2026-10-08
 
 ### Changed

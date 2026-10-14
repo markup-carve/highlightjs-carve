@@ -79,7 +79,8 @@ const CONSTRUCTS = {
   'table header row': '|= A |= B |',
   'row attributes': '| a | b |{.ok}',
   'container': '::: note "T"',
-  'caption': '^ Figure 1',
+  // A caption needs a block above it; carve 0.1.11 renders a lone `^ Figure 1` as <p>.
+  'caption': '![a](i.png)\n^ Figure 1',
   'thematic break': '---',
   'definition term': ':: term',
   'code fence': '```php\n$x = 1;\n```',
@@ -115,6 +116,8 @@ const NEGATIVES = {
   'a colon fence needs a space before its word': ['text\n:::note\nbody', ':::note'],
   'a colon with only whitespace opens no description': [':: t\n:   \n', ':   '],
   'a term marker with no content is not a term': [':: \n', ':: '],
+  // carve 0.1.11: `^ Figure 1` with no block above renders <p>^ Figure 1</p>.
+  'a caption line with no block above is a paragraph': ['^ Figure 1', '^ Figure 1'],
 }
 for (const [label, [source, text]] of Object.entries(NEGATIVES)) {
   check(label, !paints(source, text))
@@ -124,9 +127,13 @@ for (const [label, [source, text]] of Object.entries(NEGATIVES)) {
 // The definition the language actually needs, in context.
 // ---------------------------------------------------------------------------
 console.log('\ncontext-sensitive rulings')
-check('a description with content scopes', paints(':: t\n:  real content\n', 'real content'))
-check('the {empty} sentinel scopes', paints(':: t\n: {empty}\n', '{empty}'))
+// carve 0.1.11 renders `:: t` / `:  real content` as <dd>real content</dd>: the
+// marker is syntax, the text is plain paragraph content, as in a list item.
+check('a description marker scopes', highlight(':: t\n:  real content\n').split('\n')[1].startsWith('<span'))
+check('description text stays plain', !paints(':: t\n:  real content\n', 'real content'))
+// carve 0.1.11 renders `: {empty}` as an empty <dd></dd>; the marker opens it.
+check('an {empty} description marker scopes', highlight(':: t\n: {empty}\n').split('\n')[1].startsWith('<span'))
 
 console.log('')
 assert.strictEqual(failures, 0, failures + ' coverage check(s) failed')
-console.log(Object.keys(CONSTRUCTS).length + Object.keys(NEGATIVES).length + 2 + ' passed')
+console.log(Object.keys(CONSTRUCTS).length + Object.keys(NEGATIVES).length + 3 + ' passed')
