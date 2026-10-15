@@ -15,12 +15,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   The definition is vendored from carve-grammars main (2583b07e), which also
   brings its block-context, caption, table-cell, link-label, definition-term and
   fence-language fixes. markup-carve/highlightjs-carve#25
-- The definition moves on to carve-grammars main 800176e0. An
+- The definition moves on to carve-grammars 0.1.16. An
   unclosed code fence is code to the end of the document, or to the closer of
   its container, while a closed fence longer than 32 KB still ends at its own
   closer; a footnote definition body highlights its inline markup; a `{empty}`
   body in a description or footnote is an attribute; and an escaped closer such
-  as `x\]{.c}` takes no attribute block. markup-carve/highlightjs-carve#26
+  as `x\]{.c}` takes no attribute block. markup-carve/highlightjs-carve#26,
+  markup-carve/highlightjs-carve#29
 
 ## [0.1.2] - 2026-10-08
 
