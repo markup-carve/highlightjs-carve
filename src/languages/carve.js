@@ -3,7 +3,7 @@
 // Vendored verbatim from @markup-carve/carve-grammars (unreleased source)
 // (highlightjs/carve.js) by scripts/sync.mjs. Edit the definition there,
 // release carve-grammars, then run: npm run sync
-// Source revision: b6ee7ae39a1d1a6368810d54a83bba76b0420595
+// Source revision: bf7ab3dece12d943b1ba17930e5bc911dfddf523
 // Upstream package version: 0.1.17
 /**
  * Carve language definition for highlight.js
@@ -831,7 +831,7 @@
     // so `one + two` in prose stays literal.
     const TABLE_CONTINUATION = {
         className: 'punctuation',
-        begin: /^(?<![^\r\n])(?:(?<![\s\S])\uFEFF)?[ \t]*\+[ \t]*$(?![^\r\n])/,
+        begin: /^(?<![^\r\n])(?:(?<![\s\S])\uFEFF)?\+[ \t]*$(?![^\r\n])/,
         relevance: 5,
     };
     const TABLE_CONTINUATION_ROW = {
@@ -1107,7 +1107,7 @@
     };
     const previousLineStart = (input, start) => (start === 0 ? -1 : input.lastIndexOf('\n', start - 2) + 1);
     // A line after which a new block starts: it ends any paragraph above.
-    const BLOCK_BOUNDARY_LINE = /^\uFEFF?[ \t]*(?:#{1,6}(?: |$)|`{3,}|~{3,}|:{3,}|%{3,}|(?:-{3,}|\*{3,}|_{3,})[ \t]*$|\|.*\|(?:\{[^{}]*\})?[ \t]*$|\{[^{}]*\}[ \t]*$|%%|\[\^?[^\]]+\]:(?: |$)|\*\[[A-Za-z0-9]+\]:|:: |\+[ \t]*$)/;
+    const BLOCK_BOUNDARY_LINE = /^\uFEFF?(?:[ \t]*(?:#{1,6}(?: |$)|`{3,}|~{3,}|:{3,}|%{3,}|(?:-{3,}|\*{3,}|_{3,})[ \t]*$|\|.*\|(?:\{[^{}]*\})?[ \t]*$|\{[^{}]*\}[ \t]*$|%%|\[\^?[^\]]+\]:(?: |$)|\*\[[A-Za-z0-9]+\]:|:: )|\+[ \t]*$)/;
     const LIST_ITEM_LINE = /^\uFEFF?[ \t]*(?:[-*]|\d{1,9}[.)]|[A-Za-z][.)]|[ivxlcdm]+[.)]|[IVXLCDM]+[.)]|\.)(?: +[^ \t]|\{)/;
     const lineKind = (line) => {
         if (/^\uFEFF?[ \t]*$/.test(line)) return 'blank';
@@ -1146,7 +1146,7 @@
                 let attach = above;
                 while (attach !== -1 && /^[ \t]*\{[^{}]*\}[ \t]*$/.test(lineAt(input, attach))) attach = previousLineStart(input, attach);
                 kind = lineKind(line) === 'text' && !/^\uFEFF?[ \t]/.test(line)
-                    && !(attach !== -1 && /^[ \t]*\+[ \t]*$/.test(lineAt(input, attach)));
+                    && !(attach !== -1 && /^\+[ \t]*$/.test(lineAt(input, attach)));
                 break;
             }
             at = above;
