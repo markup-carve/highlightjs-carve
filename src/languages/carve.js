@@ -3,7 +3,7 @@
 // Vendored verbatim from @markup-carve/carve-grammars (unreleased source)
 // (highlightjs/carve.js) by scripts/sync.mjs. Edit the definition there,
 // release carve-grammars, then run: npm run sync
-// Source revision: bf7ab3dece12d943b1ba17930e5bc911dfddf523
+// Source revision: 0abff0635cd61521f3507a6a74408ed41ed8ee88
 // Upstream package version: 0.1.17
 /**
  * Carve language definition for highlight.js
@@ -825,13 +825,73 @@
         '[ \\t]*(?:#{1,6} |-{3,}[ \\t]*$(?![^\\r\\n])|\\*{3,}[ \\t]*$(?![^\\r\\n])|_{3,}[ \\t]*$(?![^\\r\\n])|`{3,}|~{3,}|:{3,}|>(?: |$(?![^\\r\\n]))'
         + '|\\^ |\\||[-*][ \\t]|[-*]\\{|\\d+[.)][ \\t]|[A-Za-z]+[.)][ \\t]|\\.[ \\t])';
 
+    // The continuation marker at RELATIVE column 0 (markup-carve/carve#3445,
+    // CARVE-P9-031). A lone `+` is the marker only where the lines around it
+    // prove it: it sits at the marker column of an item, quote, description or
+    // footnote opened above and still open, and the next line starts at that
+    // column. Everything else is text. Lookbehinds read right to left, so a
+    // group is captured on the `+` line before the lines above it are read;
+    // the `(?=\+)` in front of each keeps them off every other position.
+    function relativePlusSource(g) {
+        var item = '(?:[-*]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\\.)';
+        var notItem = '(?!' + item + '(?:[ \\t]|\\r?$|\\{))';
+        // A list item does not interrupt a paragraph, so one under prose opens nothing.
+        var notUnderProse = '(?<!(?<![^\\n])[^ \\t\\r\\n>|#:`~*\\-+\\d[{%][^\\n]*\\n)';
+        var listOpener = notUnderProse + item + '(?:[ \\t]|\\{)';
+        var holderOpener = '(?:>|:[ \\t]|\\[\\^[^\\]\\r\\n]+\\]:[ \\t])';
+        var opener = '(?:' + listOpener + '|' + holderOpener + ')';
+        var comment = '[ \\t]*%%[^\\n]*';
+        // `(?=[^\\r\\n])` is each inner lookbehind's sentinel: these lines are never empty.
+        var underText = '(?=[^\\r\\n])(?<=(?<![^\\n])[ \\t>]*[^ \\t\\r\\n>][^\\n]*\\n)';
+        var lazyText = '(?!#{1,6}(?:[ \\t]|\\r?$)|[>|:{]|%%|\\^[ \\t]|[`~]{3}|\\$\\$|\\[\\^|[-*+](?:[ \\t]|\\r?$)|(?:[-*_][ \\t]*){3,}\\r?$)[^ \\t\\r\\n][^\\n]*';
+        var lineAt = '(?<![^\\n])(?:(?<![\\s\\S])\\uFEFF)?((?:> ?)*)(?!(?<=>) )( *)';
+        var lone = '\\+[ \\t]*(?=\\r?\\n';
+        // The lines between the opener and the `+` that keep the container
+        // open, for quote prefix `q` and column `s`. The classes are disjoint,
+        // so a run that reaches no opener fails once rather than once per way
+        // of splitting it. A list item stays open across a blank line and a
+        // comment; the other containers take neither. Bounded twice: 512 lines
+        // between two `+` and 8 earlier `+` lines, so a document of `+` lines
+        // costs a constant per line.
+        var run = function (q, s, list) {
+            var deeper = q + s + '[ \\t]+[^ \\t\\r\\n][^\\n]*';
+            var sibling = q + s + opener + '[^\\n]*';
+            var lazy = underText + q + '(?!' + s + opener + ')' + lazyText;
+            var plus = q + s + '\\+[ \\t]*\\r?';
+            // The lines of the block an earlier `+` attached, up to a blank line.
+            var attached = '(?=[^\\r\\n])(?<=(?<![^\\n])' + plus + '\\n(?:[ \\t>]*[^ \\t\\r\\n>][^\\n]*\\n){0,64})'
+                + '(?!' + deeper + '|' + sibling + '|' + plus + '\\n|' + comment + '|' + lazy + ')[ \\t>]*[^ \\t\\r\\n>][^\\n]*';
+            var kept = '(?<![^\\n])(?:' + deeper + '|' + sibling + '|' + lazy + '|' + attached
+                + (list ? '|[ \\t]*\\r?|[ \\t]*(?:>[ \\t]*)+\\r?|' + underText + q + '(?!' + s + opener + ')' + comment : '') + ')\\n';
+            return '(?:(?:' + kept + '){0,512}(?<![^\\n])' + plus + '\\n){0,8}(?:' + kept + '){0,512}';
+        };
+        var at = function (n) { return { q: '\\' + n, s: '\\' + (n + 1) }; };
+        // Under a list item, a list item below is a sibling, not the attached block.
+        var a = at(g);
+        var listed = '(?=\\+)(?<=(?<![^\\n])' + a.q + a.s + listOpener + '[^\\n]*\\n' + run(a.q, a.s, true) + lineAt + ')'
+            + lone + a.q + a.s + '(?![ \\t])' + notItem + '[^\\r\\n])';
+        var b = at(g + 2);
+        var held = '(?=\\+)(?<=(?<![^\\n])' + b.q + b.s + holderOpener + '[^\\n]*\\n' + run(b.q, b.s, false) + lineAt + ')'
+            + lone + b.q + b.s + '(?![ \\t])[^\\r\\n])';
+        // A quote's own first line: the block below starts left of it.
+        var c = at(g + 4);
+        var opened = '(?=\\+)(?<=(?:(?<![\\s\\S])|(?<![^\\n])(?!' + c.q + ')[^\\n]*\\n)' + lineAt + ')(?<=>|> )'
+            + lone + '(?!' + c.q + ')(?:> ?)*(?![ \\t>])' + notItem + '[^\\r\\n])';
+        // Openers on one line with a quote innermost (`- > +`): the block
+        // below starts at column 0 or at that line's column.
+        var d = at(g + 6);
+        var stacked = '(?=\\+)(?<=' + lineAt + '(?:(?:[-*] +(?:\\[[ xX\\-_>?]\\] +)?|' + item + ' +)+)(?:> ?)+)'
+            + lone + '(?:' + d.q + d.s + ')?(?![ \\t])' + notItem + '[^\\r\\n])';
+        return '(?:' + listed + '|' + held + '|' + opened + '|' + stacked + ')';
+    }
+
     // Table/list continuation: a lone `+` (grammar.ebnf `continuation_marker`)
     // or a continuation ROW carrying cells (`continuation_row`, corpus
     // 63-table-multi-line-cell-continuation). The row form has to end in `|`,
     // so `one + two` in prose stays literal.
     const TABLE_CONTINUATION = {
         className: 'punctuation',
-        begin: /^(?<![^\r\n])(?:(?<![\s\S])\uFEFF)?\+[ \t]*$(?![^\r\n])/,
+        begin: RegExp(relativePlusSource(1)),
         relevance: 5,
     };
     const TABLE_CONTINUATION_ROW = {
@@ -1067,18 +1127,14 @@
         { className: 'bullet', begin: RegExp('(?=[-*])' + QUOTED + '(?:[-*] +)*[-*](?:(?= )|' + GLUED_ATTR_BLOCK + ')' + NO_EMPTY) },
         { className: 'bullet', begin: RegExp('(?=[\\dA-Za-z.])' + QUOTED + '(?:\\d+[.)]|[a-zA-Z][.)]|[ivxlcdm]+[.)]|[IVXLCDM]+[.)]|\\.)(?:(?= )|' + GLUED_ATTR_BLOCK + ')' + NO_EMPTY) },
         // The `+` continuation marker: after a quoted list marker always, and
-        // as a column-0 quote's own first line when a non-blank flush-left
-        // line follows (markup-carve/carve#3105).
+        // a lone `+` in a quote where the lines around it prove it.
         {
             className: 'punctuation',
             begin: RegExp('(?=\\+)' + QUOTED.slice(0, -1)
                 + '(?:[-*] \\[[ xX\\-_>?]\\] +|(?:[-*] +)+|(?:\\d+[.)]|[a-zA-Z][.)]|[ivxlcdm]+[.)]|[IVXLCDM]+[.)]|\\.) +|'
                 + GLUED_MARKER + '))\\+[ \\t]*$(?![^\\r\\n])'),
         },
-        {
-            className: 'punctuation',
-            begin: /(?=\+)(?<=^(?<![^\r\n])(?:(?<![\s\S])\uFEFF)?>(?: >)* )\+[ \t]*(?=\r?\n[^ \t\r\n>])/,
-        },
+        { className: 'punctuation', begin: RegExp(relativePlusSource(1)) },
     );
 
     // Horizontal rules: --- or *** or ___
@@ -1212,7 +1268,8 @@
     const MARKER_LINE_CONTINUATION = {
         className: 'punctuation',
         begin: RegExp('(?=\\+)(?<=' + LIST_MARKER_BEFORE_BLOCK + '|^(?<![^\\r\\n])(?:(?<![\\s\\S])\\uFEFF)?[ \\t]*'
-            + GLUED_MARKER + ')\\+[ \\t]*$(?![^\\r\\n])'),
+            + GLUED_MARKER + '|^(?<![^\\r\\n])(?:(?<![\\s\\S])\\uFEFF)?[ \\t]*(?:(?:[-*] +(?:\\[[ xX\\-_>?]\\] +)?'
+            + '|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)] +|\\. +))+)\\+[ \\t]*$(?![^\\r\\n])'),
         relevance: 0,
     };
 
@@ -1267,7 +1324,7 @@
         },
         relevance: 0,
         // The inline modes are appended once CONTAINS exists.
-        contains: [DEFINITION_TERM, DESCRIPTION_MARKER, DESCRIPTION_CONTINUATION, bodyAttribute(':')],
+        contains: [DEFINITION_TERM, DESCRIPTION_MARKER, DESCRIPTION_CONTINUATION, TABLE_CONTINUATION, bodyAttribute(':')],
     };
 
     /*
@@ -1457,7 +1514,9 @@
     // The opener line a body reads its language off, in a lookbehind checked
     // only at that line's end. Words match case-insensitively.
     const anyCase = (word) => [...word].map((c) => (/[a-z]/.test(c) ? `[${c}${c.toUpperCase()}]` : /[+#.\/-]/.test(c) ? '\\' + c : c)).join('');
-    const OPENER_LINE = '^(?<![^\\r\\n])(?:(?<![\\s\\S])\uFEFF)?[ \\t]*(?:`{3,}|~{3,}) ?';
+    const OPENER_LINE = '^(?<![^\\r\\n])(?:(?<![\\s\\S])\uFEFF)?(?:[ \\t]*|'
+        + LIST_MARKER_BEFORE_BLOCK.replace('^(?<![^\\r\\n])(?:(?<![\\s\\S])\\uFEFF)?', '')
+        + ')(?:`{3,}|~{3,}) ?';
     const languageOpener = (key) => [
         ...(FENCE_LANGUAGES[key] ? [OPENER_LINE + '(?:' + FENCE_LANGUAGES[key].map(anyCase).join('|') + ')(?![A-Za-z0-9_+#./-])[^\\n]*'] : []),
         ...(RAW_FENCE_LANGUAGES[key] ? [OPENER_LINE + '=(?:' + RAW_FENCE_LANGUAGES[key].map(anyCase).join('|') + ')(?![\\w-])[ \\t]*'] : []),
@@ -1476,7 +1535,7 @@
         ...(subLanguage ? { subLanguage } : { contains: [] }),
     });
     const FENCE_BODIES = [...Object.keys(FENCE_LANGUAGES).map(fenceBody), fenceBody(undefined)];
-    const FENCE_INFO_LEAD = '(?<=^(?<![^\\r\\n])(?:(?<![\\s\\S])\\uFEFF)?[ \\t]*(?:`{3,}|~{3,}) ?)';
+    const FENCE_INFO_LEAD = '(?<=' + OPENER_LINE + ')';
     const FENCE_INFO = [
         { className: 'title', begin: new RegExp('(?=[A-Za-z0-9_+#./-])' + FENCE_INFO_LEAD + FENCE_LANGUAGE) },
         { className: 'keyword', begin: new RegExp('(?==)' + FENCE_INFO_LEAD + RAW_FENCE_INFO) },
@@ -1531,6 +1590,42 @@
 
     const CODE_BLOCK = fencedVerbatim(CODE_FENCE_INFO);
     const RAW_BLOCK = fencedVerbatim(RAW_FENCE_INFO);
+    const MARKER_CODE_FORMS = [];
+    for (let depth = 1; depth <= 8; depth++) {
+        MARKER_CODE_FORMS.push([Array(depth).fill('[-*] ').join(''), depth * 2]);
+        MARKER_CODE_FORMS.push([Array(depth).fill('[-*] ').join('') + '\\[[ xX\\-_>?]\\] ', depth * 2]);
+    }
+    for (let digits = 1; digits <= 9; digits++) {
+        MARKER_CODE_FORMS.push(['[0-9]{' + digits + '}[.)] ', digits + 2]);
+    }
+    for (let roman = 2; roman <= 6; roman++) {
+        MARKER_CODE_FORMS.push(['(?:[ivxlcdm]{' + roman + '}|[IVXLCDM]{' + roman + '})[.)] ', roman + 2]);
+    }
+    MARKER_CODE_FORMS.push(['[A-Za-z][.)] ', 3], ['\\. ', 2]);
+    const PLAIN_LINE_BEFORE_MARKER = '(?<![^\\n])(?!(?:[-*] +|[0-9]+[.)] +|(?:[ivxlcdm]+|[IVXLCDM]+)[.)] +|[A-Za-z][.)] +|\\. +|> |#{1,6} |:{2,}|\\||[-*_]{3,}|[`~]{3,}|%%|\\+))[\\S][^\\n]*\\n';
+    const markerLineFence = (info, marker, width) => ({
+        className: 'code',
+        beginScope: 'keyword',
+        begin: RegExp('(?=[`~])(?<=^(?<![^\\r\\n])(?<!' + PLAIN_LINE_BEFORE_MARKER
+            + ')(?:(?<![\\s\\S])\\uFEFF)?([ \\t]*)'
+            + marker + ')((`|~)\\3{2,})'
+            + '(?=(?: ?' + info + ')?[ \\t]*\\r?$(?![^\\r\\n]))'
+            + '(?=[^\\n]*(?:\\n[ \\t]*\\r?(?![^\\n])|\\n\\1[ ]{' + width
+            + '}[ \\t]*[^ \\t\\r\\n][^\\r\\n]*\\r?)*?\\n\\1[ ]{' + width
+            + '}\\2\\3*[ \\t]*\\r?$(?![^\\r\\n]))'),
+        'on:begin': (m) => {
+            Object.assign(codeFence(m), { indent: m[1] + ' '.repeat(width), run: m[2] });
+        },
+        endScope: 'keyword',
+        end: /^(?<![^\r\n])([ \t]*)(`{3,}|~{3,})[ \t]*\r?$(?![^\r\n])/,
+        'on:end': (m, resp) => {
+            if (!closesFence(m)) resp.ignoreMatch();
+        },
+        contains: [...FENCE_INFO, ...FENCE_BODIES],
+        relevance: 10,
+    });
+    const CODE_BLOCK_ON_MARKER_LINE = MARKER_CODE_FORMS.map(([marker, width]) => markerLineFence(CODE_FENCE_INFO, marker, width));
+    const RAW_BLOCK_ON_MARKER_LINE = MARKER_CODE_FORMS.map(([marker, width]) => markerLineFence(RAW_FENCE_INFO, marker, width));
 
     // A FENCE LINE THIS GRAMMAR DOES NOT PAIR: an opener with no closer ahead,
     // and the closer of a pair the rules above did not take. It stays what both
@@ -2530,6 +2625,8 @@
         HEADING,
         CODE_BLOCK,        // ``` ... ``` - before the delimiter-only fallback
         RAW_BLOCK,         // ```=html ... ``` - same, with the raw info string
+        ...CODE_BLOCK_ON_MARKER_LINE,
+        ...RAW_BLOCK_ON_MARKER_LINE,
         UNCLOSED_CODE_BLOCK,  // an unpaired fence at column 0: to its container's end
         LONE_CODE_FENCE,   // a fence line neither of those paired: the line only
         FIGURE_GROUP_BLOCK,  // Must be before DIV_BLOCK (both match `::: figure`)
