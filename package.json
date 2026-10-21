@@ -45,7 +45,7 @@
     "highlight.js": "^11"
   },
   "devDependencies": {
-    "@markup-carve/carve-grammars": "github:markup-carve/carve-grammars#bf7ab3dece12d943b1ba17930e5bc911dfddf523",
+    "@markup-carve/carve-grammars": "github:markup-carve/carve-grammars#0abff0635cd61521f3507a6a74408ed41ed8ee88",
     "highlight.js": "^11.11.1"
   },
   "publishConfig": {
