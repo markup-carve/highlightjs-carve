@@ -3,7 +3,7 @@
 // Vendored verbatim from @markup-carve/carve-grammars (unreleased source)
 // (highlightjs/carve.js) by scripts/sync.mjs. Edit the definition there,
 // release carve-grammars, then run: npm run sync
-// Source revision: 737135fee5b2e35ac84c8ebb7e8dec42a01a7a9a
+// Source revision: 11c936855d2e463f3f7e10fcd14fe6fceb7699f4
 // Upstream package version: 0.1.17
 /**
  * Carve language definition for highlight.js
@@ -886,8 +886,9 @@
         opened = opened.join('|');
         // Openers on one line with a quote innermost (`- > +`): the block
         // below starts at column 0 or at that line's column.
+        // Every `>` needs its space: `- >+`, `- > >+` and `- >> +` are item text.
         var d = at(g + 4);
-        var stacked = '(?=\\+)(?<=' + lineAt + '(?:(?:[-*] +(?:\\[[ xX\\-_>?]\\] +)?|' + item + ' +)+)(?:> ?)+)'
+        var stacked = '(?=\\+)(?<=' + lineAt + '(?:(?:[-*] +(?:\\[[ xX\\-_>?]\\] +)?|' + item + ' +)+)(?:> )+)'
             + lone + '(?:' + d.q + d.s + ')?(?![ \\t])' + notItem + '[^\\r\\n])';
         return '(?:' + listed + '|' + held + '|' + opened + '|' + stacked + ')';
     }
