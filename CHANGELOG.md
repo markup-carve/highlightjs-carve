@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-23
+
+### Fixed
+
+- A document that starts with a blank line followed by a list no longer hangs
+  highlight.js: 0.1.5 scoped nothing there and could spend over a minute of
+  CPU. The definition moves to carve-grammars 0.1.19, which also fixes
+  definition lists: a list marker under a paragraph line hosts no term, and a
+  footnote body's description and tab count from the body's column.
+  markup-carve/highlightjs-carve#40
+
 ## [0.1.5] - 2026-10-23
 
 ### Added
