@@ -1,6 +1,6 @@
 // GENERATED FILE - DO NOT EDIT.
 //
-// Vendored verbatim from @markup-carve/carve-grammars@0.1.18
+// Vendored verbatim from @markup-carve/carve-grammars@0.1.19
 // (highlightjs/delimited.js) by scripts/sync.mjs. Edit the definition there,
 // release carve-grammars, then run: npm run sync
 (function (root, factory) {
