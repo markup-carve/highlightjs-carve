@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-23
+
+### Fixed
+
+- A continuation marker is highlighted where the engine reads one, by its
+  container's column: a `+` before a sibling list item at its column is text,
+  and `- [ ] +` scopes the bullet and the marker apart.
+  markup-carve/highlightjs-carve#30, markup-carve/highlightjs-carve#31
+- A quote-prefixed `+` needs one space after each `>` (markup-carve/carve#3421):
+  `>+`, `>>+` and `>> +` are paragraph text, also after a list marker
+  (`- >+`), while `> +` and `> > +` are markers.
+  markup-carve/highlightjs-carve#32, markup-carve/highlightjs-carve#33,
+  markup-carve/highlightjs-carve#34
+- A code fence on a list item's marker line is highlighted as a block.
+  markup-carve/highlightjs-carve#31
+
 ## [0.1.3] - 2026-10-14
 
 ### Fixed
