@@ -13,7 +13,7 @@
  *
  * The release check alone let the copy fall 40 commits behind carve-grammars
  * main, including a fix for exponential backtracking. So the vendored file is
- * also compared with highlightjs/carve.js on main, reported as behind_main.
+ * also compared with highlightjs/carve.js and delimited.js on main, reported as behind_main.
  */
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -41,16 +41,19 @@ function report(behind, note) {
     }
 }
 
-/** The vendored file is the sync header (comment lines) followed by main's definition verbatim. */
+/** Each vendored file is the sync header (comment lines) followed by main's definition verbatim. */
 function reportMain(repo) {
     const head = run('git', '-C', repo, 'rev-parse', 'HEAD')
-    const main = execFileSync('git', ['-C', repo, 'show', 'HEAD:highlightjs/carve.js'], { encoding: 'utf8' })
-    const vendored = readFileSync(new URL('../src/languages/carve.js', import.meta.url), 'utf8')
-    const header = vendored.endsWith(main) ? vendored.slice(0, -main.length) : null
-    const behind = header !== null && header.split('\n').every((line) => line === '' || line.startsWith('//')) ? 0 : 1
+    const stale = FILES.filter((file) => {
+        const main = execFileSync('git', ['-C', repo, 'show', `HEAD:highlightjs/${file}`], { encoding: 'utf8' })
+        const vendored = readFileSync(target(file), 'utf8')
+        const header = vendored.endsWith(main) ? vendored.slice(0, -main.length) : null
+        return !(header !== null && header.split('\n').every((line) => line === '' || line.startsWith('//')))
+    })
+    const behind = stale.length ? 1 : 0
     console.log(behind
-        ? `src/languages/carve.js differs from highlightjs/carve.js on ${pkg} main (${head}).`
-        : `  ok vendored definition matches ${pkg} main (${head})`)
+        ? stale.map((file) => `src/languages/${file} differs from highlightjs/${file} on ${pkg} main (${head}).`).join('\n')
+        : `  ok vendored definitions match ${pkg} main (${head})`)
     if (process.env.DRIFT_REPORT) {
         appendFileSync(process.env.DRIFT_REPORT, `behind_main=${behind}\nmain=${head}\n`)
     } else if (behind) {
