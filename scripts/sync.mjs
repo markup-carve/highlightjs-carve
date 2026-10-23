@@ -29,9 +29,17 @@ import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
 
+/** The vendored files, by name under both `highlightjs/` upstream and `src/languages/` here. */
+export const FILES = ['carve.js', 'delimited.js']
+
 /** The installed definition, resolved through the one subpath every version exports. */
 export function grammarFile() {
     return require.resolve('@markup-carve/carve-grammars/highlightjs/carve.js')
+}
+
+/** An installed upstream file. Read by path: the package is ESM, so `require` of a `.js` is empty. */
+export function upstreamFile(file) {
+    return join(grammarsDir(), 'highlightjs', file)
 }
 
 /** The dependency's package root, found by walking up from the resolved file. */
@@ -49,7 +57,7 @@ export function upstreamVersion() {
 }
 
 /** The vendored file: a provenance header plus the upstream definition verbatim. */
-export function render(source = readFileSync(grammarFile(), 'utf8'), version = upstreamVersion()) {
+export function render(source = readFileSync(grammarFile(), 'utf8'), version = upstreamVersion(), file = 'carve.js') {
     const dependency = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
         .devDependencies['@markup-carve/carve-grammars']
     const revision = dependency.match(/#([a-f0-9]{40})$/)?.[1]
@@ -58,7 +66,7 @@ export function render(source = readFileSync(grammarFile(), 'utf8'), version = u
         '//',
         '// Vendored verbatim from @markup-carve/carve-grammars'
             + (revision ? ' (unreleased source)' : '@' + version),
-        '// (highlightjs/carve.js) by scripts/sync.mjs. Edit the definition there,',
+        '// (highlightjs/' + file + ') by scripts/sync.mjs. Edit the definition there,',
         '// release carve-grammars, then run: npm run sync',
         ...(revision ? ['// Source revision: ' + revision, '// Upstream package version: ' + version] : []),
         '',
@@ -66,9 +74,13 @@ export function render(source = readFileSync(grammarFile(), 'utf8'), version = u
     return header + source
 }
 
-const target = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'languages', 'carve.js')
+export function target(file) {
+    return join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'languages', file)
+}
 
 if (process.argv[1] && process.argv[1].endsWith('sync.mjs')) {
-    writeFileSync(target, render(), 'utf8')
+    for (const file of FILES) {
+        writeFileSync(target(file), render(readFileSync(upstreamFile(file), 'utf8'), upstreamVersion(), file), 'utf8')
+    }
     console.log('synced from @markup-carve/carve-grammars@' + upstreamVersion())
 }

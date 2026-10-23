@@ -12,7 +12,7 @@ import assert from 'node:assert'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import hljs from 'highlight.js'
-import carve from '../src/index.js'
+import carve, { csv, tsv } from '../src/index.js'
 import { REQUIRED_ALIASES, isKnownUpstreamGap } from './aliases.mjs'
 import { upstreamVersion } from '../scripts/sync.mjs'
 
@@ -80,6 +80,26 @@ ok('classic script self-registers against a global hljs', () => {
     vm.runInContext(code, sandbox)
     assert.ok(registered && registered.name === 'carve', 'the classic script did not register the language')
     assert.strictEqual(typeof sandbox.carveHljs, 'function', 'globalThis.carveHljs was not exposed')
+})
+
+ok('a csv or tsv fence body highlights its separators once csv and tsv are registered', () => {
+    hljs.registerLanguage('carve', carve)
+    hljs.registerLanguage('csv', csv)
+    hljs.registerLanguage('tsv', tsv)
+    for (const [word, sep] of [['csv', ','], ['tsv', '\t']]) {
+        const { value } = hljs.highlight('```' + word + '\nname' + sep + 'qty\n"a, b"' + sep + '2\n```\n', { language: 'carve' })
+        assert.ok(value.includes('<span class="language-' + word + '">'), word + ' body was not handed to the ' + word + ' language')
+        assert.ok(value.includes('<span class="hljs-operator">' + sep + '</span>'), word + ' separator is not hljs-operator: ' + value)
+    }
+})
+
+ok('classic delimited script self-registers csv and tsv against a global hljs', () => {
+    const code = readFileSync(new URL('../src/languages/delimited.js', import.meta.url), 'utf8')
+    const registered = []
+    const sandbox = { hljs: { registerLanguage: (name) => registered.push(name) } }
+    vm.createContext(sandbox)
+    vm.runInContext(code, sandbox)
+    assert.deepStrictEqual(registered, ['csv', 'tsv'])
 })
 
 console.log('\n' + passed + ' passed')

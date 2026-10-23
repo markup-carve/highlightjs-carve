@@ -9,18 +9,17 @@
  */
 import assert from 'node:assert'
 import { readFileSync } from 'node:fs'
-import { render, upstreamVersion } from '../scripts/sync.mjs'
+import { FILES, render, target, upstreamFile, upstreamVersion } from '../scripts/sync.mjs'
 
-const vendored = readFileSync(new URL('../src/languages/carve.js', import.meta.url), 'utf8')
-const expected = render()
+for (const file of FILES) {
+    assert.strictEqual(
+        readFileSync(target(file), 'utf8'),
+        render(readFileSync(upstreamFile(file), 'utf8'), upstreamVersion(), file),
+        'src/languages/' + file + ' is out of date with @markup-carve/carve-grammars@'
+            + upstreamVersion()
+            + '. Run: npm run sync',
+    )
+    console.log('  ok vendored ' + file + ' matches @markup-carve/carve-grammars@' + upstreamVersion())
+}
 
-assert.strictEqual(
-    vendored,
-    expected,
-    'src/languages/carve.js is out of date with @markup-carve/carve-grammars@'
-        + upstreamVersion()
-        + '. Run: npm run sync',
-)
-
-console.log('  ok vendored definition matches @markup-carve/carve-grammars@' + upstreamVersion())
-console.log('\n1 passed')
+console.log('\n' + FILES.length + ' passed')

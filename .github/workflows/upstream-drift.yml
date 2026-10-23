@@ -91,7 +91,7 @@ jobs:
           # A plain npm install keeps a lockfile entry that still satisfies the range.
           npm install --save-dev --no-audit --no-fund "@markup-carve/carve-grammars@${range}"
           npm run sync
-          git add package.json package-lock.json src/languages/carve.js
+          git add package.json package-lock.json src/languages/
           git commit -q -m "chore: re-vendor the definition from carve-grammars ${LATEST}"
           git push -q --force "${remote}" "${branch}"
 

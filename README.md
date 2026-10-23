@@ -28,22 +28,29 @@ npm install highlight.js highlightjs-carve
 
 ```js
 import hljs from 'highlight.js'
-import carve from 'highlightjs-carve'
+import carve, { csv, tsv } from 'highlightjs-carve'
 
 hljs.registerLanguage('carve', carve)
+hljs.registerLanguage('csv', csv)
+hljs.registerLanguage('tsv', tsv)
 
 const { value } = hljs.highlight(source, { language: 'carve' })
 ```
 
+`csv` and `tsv` highlight the body of a `csv` or `tsv` fence: separators,
+quoted fields and the header row. highlight.js ships no language under those
+names, so without them such a fence body stays plain.
+
 ### Browser, no bundler
 
-The definition is UMD and dependency-free, so a plain `<script>` after
-highlight.js registers it against the global `hljs`:
+The definitions are UMD and dependency-free, so plain `<script>` tags after
+highlight.js register `carve`, `csv` and `tsv` against the global `hljs`:
 
 ```html
 <link rel="stylesheet" href="https://unpkg.com/highlight.js/styles/github.css">
 <script src="https://unpkg.com/highlight.js/lib/highlight.min.js"></script>
 <script src="https://unpkg.com/highlightjs-carve/src/languages/carve.js"></script>
+<script src="https://unpkg.com/highlightjs-carve/src/languages/delimited.js"></script>
 <script>hljs.highlightAll();</script>
 ```
 
@@ -85,7 +92,7 @@ the Prism, highlight.js, TextMate and Tiptap surfaces together with one shared
 construct inventory so a syntax construct cannot land on some of them and be
 forgotten on the rest.
 
-This package vendors the highlight.js file from there verbatim, because a CDN
+This package vendors the highlight.js files (`carve.js`, `delimited.js`) from there verbatim, because a CDN
 cannot resolve the bare import a re-export would contain. The copy is generated,
 never edited.
 
