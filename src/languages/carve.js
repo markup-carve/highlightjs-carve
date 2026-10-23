@@ -1,10 +1,8 @@
 // GENERATED FILE - DO NOT EDIT.
 //
-// Vendored verbatim from @markup-carve/carve-grammars (unreleased source)
+// Vendored verbatim from @markup-carve/carve-grammars@0.1.18
 // (highlightjs/carve.js) by scripts/sync.mjs. Edit the definition there,
 // release carve-grammars, then run: npm run sync
-// Source revision: 11c936855d2e463f3f7e10fcd14fe6fceb7699f4
-// Upstream package version: 0.1.17
 /**
  * Carve language definition for highlight.js
  *
@@ -875,22 +873,70 @@
             + lone + b.q + b.s + '(?![ \\t])[^\\r\\n])';
         // A quote's own first line (`> +`, `> > +`), one branch per depth k: the
         // line above is no quote line of depth k or more, and the line below has
-        // fewer than k `> ` prefixes before its block. Every `>` needs its space
+        // fewer than k `> ` prefixes before its block, indented freely after at
+        // least one of them. Every `>` needs its space
         // (markup-carve/carve#3421): `>+`, `>>+`, `>> +` are text.
         var opened = [];
         for (var k = 1; k <= 8; k++) {
             var deep = '(?:> ){' + (k - 1) + '}>[ \\r\\n]';
             opened.push('(?=\\+)(?<=(?:(?<![\\s\\S])\\uFEFF?|(?<![^\\n])(?!' + deep + ')[^\\n]*\\n)(?:> ){' + k + '})'
-                + lone + '(?:> ){0,' + (k - 1) + '}(?!>(?: |\\r?$))(?![ \\t])' + notItem + '[^\\r\\n])');
+                + lone + '(?:' + (k > 1 ? '(?:> ){1,' + (k - 1) + '} +|' : '') + '(?:> ){0,' + (k - 1) + '}(?!>(?: |\\r?$)))(?![ \\t])' + notItem + '[^\\r\\n])');
         }
         opened = opened.join('|');
+        // A quote's own first line inside a list item or description (`- a` /
+        // `  > +`), at or right of the item's content column and under no quote
+        // line: the follower is lazy text at the host's column 0, or a non-list
+        // block at the quote's column with fewer `> ` prefixes (depth 8 at most).
+        // The host may itself sit in a quote (`> - a` / `>   > +`), up to two
+        // levels. One branch per prefix, indent and depth, so no group is captured.
+        // An opening fence with no closer ahead is lazy text too (carve-js 0.1.13
+        // folds it into the quote paragraph); a closed one is a block. The closer
+        // scan is bounded to 32 KB.
+        // A closer must carry the opener's own prefix `P`, no more and no less.
+        // Group `f` captures the opening run. Past 32 KB with neither a closer nor
+        // the end of its container the fence counts as closed.
+        var unclosedFence = function (P, f) {
+            return '(`{3,}(?!`)|~{3,}(?!~))(?=[\\s\\S]{0,32768}?(?:$(?![\\s\\S])|\\n(?!' + P + ')))(?![^\\n]*\\r?\\n[\\s\\S]{0,32768}?(?<![^\\n])' + P + '[ \\t]*\\' + f + '(?:(?<=`)`|(?<=~)~)*[ \\t]*\\r?(?:\\n|$(?![\\s\\S])))[^\\r\\n]*';
+        };
+        // `base` is the number of the first group this branch captures: the
+        // prefix of a quote holding the host (often empty). The `+` line's own
+        // prefixes are captured too, so a follower with fewer of them is one
+        // check rather than one branch per depth.
+        var hostedAt = function (base) {
+            var next = base;
+            var P = '\\' + next++;
+            // The host sits in a quote: the captured prefix is not empty.
+            var held = '(?!' + P + '(?<![^\\n]))';
+            var pf = '\\' + next++;
+            var f = next++;
+            var hosted = [];
+            var follow = [];
+            // An indented quote with fewer `> ` than the `+` line attaches too.
+            var q = next++;
+            var quoteFollow = held + '(?= )(?<=(?<![^\\n])' + P + ' +((?:> ){2,})\\+[ \\t]*\\r?\\n' + P + ') +(?!\\' + q + ')(?:> )+(?![ \\t>])' + notItem + '[^\\r\\n]|';
+            for (var n = 1; n <= 12; n++) {
+                var host = '(?=[^\\n]{0,' + n + '}(?=[^ \\t\\r\\n])(?<=(?<![^\\n])' + P + '[ \\t]*(?:' + item + '|(?=:)(?<=(?<![^\\n])' + P + '[ \\t]*::?[ \\t][^\\n]*\\n' + P + '[ \\t]*):)[ \\t]+)[^ \\t\\r\\n])';
+                hosted.push('(?=\\+)(?<=(?<![^\\n])' + P + host + '[^\\n]*\\n(?:' + P + '(?:[ \\t]*\\r?|[ \\t]+[^ \\t\\r\\n][^\\n]*)\\n){0,64}' + P + ' {' + n + '}(?:> )+)'
+                    + '(?=\\+)(?<=(?<![^\\n])' + P + '(?![ \\t]*(?:' + item + '[ \\t]+)*>)[^\\n]*\\n' + P + ' {' + n + '}(?:> )+)');
+                var k = next++;
+                follow.push('(?= {' + n + '})(?<=(?<![^\\n])' + P + ' {' + n + '}((?:> )+)\\+[ \\t]*\\r?\\n' + P + ') {' + n + '}(?!\\' + k + ')(?:> )*');
+            }
+            // Under an outer quote, lazy text and an unclosed fence may drop
+            // prefixes, and any non-list block indented past the prefix attaches.
+            return '(?=\\+)(?<=[ ]> )(?=\\+)(?<=(?<![^\\n])((?:> )*) +(?:> )+)(?:' + hosted.join('|') + ')' + lone
+                + '(?:(?!' + P + '> )((?:> )*)(?:' + lazyText + '|' + unclosedFence(pf, f) + ')|' + P
+                + '(?:' + held + ' +(?!>(?: |\\r?$))' + notItem + '[^ \\t\\r\\n]|' + quoteFollow + '(?:' + follow.join('|') + ')(?![ \\t>])' + notItem + '[^\\r\\n])))';
+        };
         // Openers on one line with a quote innermost (`- > +`): the block
         // below starts at column 0 or at that line's column.
         // Every `>` needs its space: `- >+`, `- > >+` and `- >> +` are item text.
         var d = at(g + 4);
         var stacked = '(?=\\+)(?<=' + lineAt + '(?:(?:[-*] +(?:\\[[ xX\\-_>?]\\] +)?|' + item + ' +)+)(?:> )+)'
             + lone + '(?:' + d.q + d.s + ')?(?![ \\t])' + notItem + '[^\\r\\n])';
-        return '(?:' + listed + '|' + held + '|' + opened + '|' + stacked + ')';
+        // The hosted branches capture groups numbered after all of the above.
+        var groups = function (source) { return RegExp(source + ')|').exec('').length - 1; };
+        var before = '(?:' + listed + '|' + held + '|' + opened + '|' + stacked;
+        return before + '|' + hostedAt(g + groups(before)) + ')';
     }
 
     // Table/list continuation: a lone `+` (grammar.ebnf `continuation_marker`)
@@ -1128,6 +1174,34 @@
      * below still see the text. Inline formatting stays out: those modes may
      * span lines and would carry the next line's `>` into their run.
      */
+    // A quoted term indented past the quote's column 0 opens a list only at or
+    // right of the content column of a quoted list item or description above
+    // it at the same quote prefix, as `TERM_HOSTED` reads an unquoted one. Each
+    // call names its groups by `tag`, since one regex may hold several.
+    function quotedTermHostedSource(tag, opener) {
+        var list = '(?:[-*]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\\.)(?: \\[[ xX\\-_>?]\\])?';
+        // A description hosts only at column 0 or after list markers on its
+        // line, and two blank lines end it.
+        var leads = ['[ \\t]*' + list + ' +', '(?:' + list + ' +)*: +'];
+        var at = [];
+        for (var h = 0; h < 2; h++) {
+            for (var n = 1; n <= 12; n++) {
+                var g = 'qh' + tag + h + 'n' + n;
+                var prefix = '(?:\\k<' + g + '>|[ \\t]*(?:[-*]|[0-9]+[.)]) +>(?: >)*)';
+                var host = '(?<![^\\n])(?:(?<![\\s\\S])\\uFEFF)?' + prefix + ' (?=[^\\n]{0,' + n + '}(?=[^ \\t\\r\\n])(?<=(?<![^\\n])(?:(?<![\\s\\S])\\uFEFF)?'
+                    + prefix + ' ' + leads[h] + ')[^ \\t\\r\\n])[^\\n]*\\n';
+                var line = '(?<![^\\n])\\k<' + g + '>(?:[ \\t]*\\r?'
+                    + '| ' + (n > 1 ? '(?! {1,' + (n - 1) + '}:: )' : '') + '[ \\t]+[^ \\t\\r\\n][^\\n]*'
+                    + '| (?=[^ \\t\\r\\n])(?<![ \\t>]\\r?\\n\\k<' + g + '> )(?!' + opener + ')(?!::? )[^\\n]*)\\n'
+                    + (h ? '(?<!(?<![^\\n])\\k<' + g + '>[ \\t]*\\r?\\n\\k<' + g + '>[ \\t]*\\r?\\n)' : '');
+                at.push('(?=::)(?<=' + host + '(?:' + line + '){0,64}(?<![^\\n])(?:(?<![\\s\\S])\\uFEFF)?(?<' + g + '>[ \\t]*>(?: >)*) {' + (n + 1) + '})');
+            }
+        }
+        // Any quoted host within reach first: most quoted terms have none.
+        var any = '(?=::)(?<=(?<![^\\n])(?:(?<![\\s\\S])\\uFEFF)?[ \\t]*(?:(?:[-*]|[0-9]+[.)]) +)?>(?: >)* (?:' + leads.join('|') + ')[^\\n]*\\n(?:[^\\n]*\\n){0,64}[ \\t]*>(?: >)*   +)';
+        return any + '(?:' + at.join('|') + ')';
+    }
+
     const QUOTED = '(?<=(?<![^\\r\\n])(?:(?<![\\s\\S])\\uFEFF)?[ \\t]*>(?: >)* )';
     const NO_EMPTY = '(?![ \\t]*$(?![^\\r\\n]))';
     BLOCKQUOTE.contains.push(
@@ -1144,6 +1218,21 @@
                 + GLUED_MARKER + '))\\+[ \\t]*$(?![^\\r\\n])'),
         },
         { className: 'punctuation', begin: RegExp(relativePlusSource(1)) },
+        // A quoted definition list: the `::` of a term, and a `:` at the column of
+        // a term or description above it, under a quoted term.
+        { className: 'punctuation', begin: /(?=:)(?<=(?<![^\r\n])(?:(?<![\s\S])\uFEFF)?[ \t]*>(?: >)* )::(?= +[^ \t\r\n])/ },
+        { className: 'punctuation', begin: RegExp('(?=::)' + quotedTermHostedSource('t', OTHER_BLOCK_OPENER_SOURCE) + '::(?= +[^ \\t\\r\\n])') },
+        {
+            className: 'punctuation',
+            begin: RegExp(/(?=:)(?<=(?<![^\r\n])(?:(?<![\s\S])\uFEFF)?[ \t]*>(?: >)* ::[ ][^\n]*\n(?:[ \t]*>[^\n]*\n){0,64}[^\n]*)(?=:)(?<=(?<![^\r\n])(?:(?<![\s\S])\uFEFF)?[ \t]*>(?: >)* (?:\k<dcol>: |\k<dcol>:: (?<=> :: )|\k<dcol>(?=::)QHOSTDESC:: )[^\n]*\n(?:[ \t]*>[^\n]*\n){0,64}(?<![^\r\n])(?:(?<![\s\S])\uFEFF)?[ \t]*>(?: >)* (?<dcol> *)):(?= +[^ \t\r\n])/.source.replace('QHOSTDESC', quotedTermHostedSource('c', OTHER_BLOCK_OPENER_SOURCE))),
+        },
+        // A description at the column of the nearest term above it that a quoted
+        // list item or description hosts.
+        {
+            className: 'punctuation',
+            begin: RegExp('(?=:)(?<=(?<![^\\r\\n])(?:(?<![\\s\\S])\\uFEFF)?[ \\t]*>(?: >)* \\k<dc>(?=::)' + quotedTermHostedSource('d', OTHER_BLOCK_OPENER_SOURCE)
+                + '::[^\\n]*\\n(?:(?<![^\\n])[ \\t]*>(?: >)*(?! \\k<dc>:: )[^\\n]*\\n){0,64}(?<![^\\r\\n])(?:(?<![\\s\\S])\\uFEFF)?[ \\t]*>(?: >)* (?<dc> +)):(?= +[^ \\t\\r\\n])'),
+        },
     );
 
     // Horizontal rules: --- or *** or ___
@@ -1288,10 +1377,62 @@
     // The open description's content column, which DEFINITION_LIST_ENTRY's
     // end reads; a term resets it, so no list inherits another's.
     let descriptionColumn = Infinity;
+    // The open entry's term column: a `:` left of it is no marker of that list.
+    let entryColumn = 0;
+    // The column of the last term the entry accepted.
+    let termColumn = 0;
+    // Inside a two-column container (`- x`, `: d`) a tab is measured from the
+    // container's column, so `  \t:: t` stands at its column 4 and a description
+    // at 4 columns or a tab is not its column (PART 9 §24 C5).
+    const relativeTabTerm = (input, at) => {
+        let end = at - 1;
+        let sawTerm = false;
+        for (let n = 0; n < 130 && end > 0; n++) {
+            const start = input.lastIndexOf('\n', end - 1) + 1;
+            const line = input.slice(start, end).replace(/\r$/, '');
+            end = start - 1;
+            if (!sawTerm) {
+                if (/^  \t:: /.test(line)) sawTerm = true;
+                else if (/^(?: {4}|\t): /.test(line)) continue;
+                else if (/^[ \t]*::? |^[^ \t]/.test(line)) return false;
+            } else if (/^[^ \t]/.test(line)) {
+                return /^(?:: |[-*] )(?! )/.test(line);
+            } else if (/^[ \t]+(?:[-*] |\w+[.)] |::? )/.test(line)) {
+                return false;
+            }
+        }
+        return false;
+    };
+    const indentColumns = (text) => [...text].reduce((col, ch) => (ch === '\t' ? col + 4 - (col % 4) : col + 1), 0);
+    // A description marker sits at the column of a term or description within
+    // 64 lines above it, which may follow list or description markers on its
+    // line (markup-carve/carve#3458); any other `:` line is no marker.
+    const DESCRIPTION_ALIGNED = (function () {
+        var unit = '(?:[ \\t]|[-*+] |[0-9A-Za-z]+[.)] |\\[[ xX\\-_>?]\\] |::? )';
+        var lines = '[^\\n]*\\n(?:[^\\n]*\\n){0,64}';
+        var at = ['\\1::? '];
+        // n columns, a tab running to the next multiple of 4.
+        var cols = function (n, ch) {
+            return '(?:' + ch + '{4}|' + ch + '{0,3}\\t){' + (n >> 2) + '}' + ch + '{' + (n & 3) + '}';
+        };
+        for (var n = 0; n <= 12; n++) {
+            at.push(unit + '*(?=:)(?<=(?<![^\\n])(?:(?<![\\s\\S])\\uFEFF)?' + cols(n, '[^\\t\\n]') + ')::? ' + lines + cols(n, ' ') + '(?<![^\\n]' + cols(n, ' ') + ')');
+        }
+        // Past 64 lines with no marker line the column cannot be read: accept it.
+        at.push('(?:(?![ \\t]*::? )[^\\n]*\\n){64}[ \\t]*');
+        return '(?<=(?<![^\\n])(?:(?<![\\s\\S])\\uFEFF)?(?:' + at[0] + lines + '\\1|' + at.slice(1).join('|') + '))';
+    })();
     const DESCRIPTION_MARKER = {
         className: 'punctuation',
-        begin: /^(?<![^\r\n])[ \t]*:(?= +(?![ \t]*$(?![^\r\n])))/,
+        begin: RegExp('^(?<![^\\r\\n])([ \\t]*)(?=:)' + DESCRIPTION_ALIGNED + ':(?= +(?![ \\t]*$(?![^\\r\\n])))'),
         'on:begin': (match) => {
+            const indent = indentColumns(match[1]);
+            if (indent < entryColumn || (indent > entryColumn && indent < descriptionColumn && indent !== termColumn)
+                || ((match[1] === '    ' || match[1] === '\t') && relativeTabTerm(match.input, match.index))) {
+                match.rule.scope = undefined;
+                return;
+            }
+            match.rule.scope = 'punctuation';
             const separator = / */y;
             separator.lastIndex = match.index + match[0].length;
             separator.test(match.input);
@@ -1320,16 +1461,54 @@
     // OTHER_BLOCK_OPENER_SOURCE above). `begin` is a zero-width lookahead so
     // DEFINITION_TERM/DESCRIPTION_MARKER (below, in `contains`) do the actual
     // per-line matching and coloring themselves.
+    // A term indented past column 0 opens a list only at or right of the
+    // content column of a list item or description above it whose lines reach
+    // down to it; anywhere else the engines fold it into a paragraph.
+    const TERM_HOSTED = (function () {
+        var list = '(?:[-*]|(?:[0-9]+|[A-Za-z]|[ivxlcdm]+|[IVXLCDM]+)[.)]|\\.)(?: \\[[ xX\\-_>?]\\])?';
+        // A description hosts only at column 0 or after list markers on its line.
+        var hostLead = '(?:[ \\t]*' + list + ' +|(?:' + list + ' +)*: +)';
+        // A column-0 lazy line right under a non-blank line keeps the item open.
+        var dlHostLazy = '(?=[^ \\t\\r\\n])(?<=[^ \\t\\r\\n][^\\r\\n]*\\r?\\n)(?!' + OTHER_BLOCK_OPENER_SOURCE + ')(?!:: |\\{[^\\n]*\\}[ \\t]*\\r?(?![^\\n]))[^ \\t\\r\\n][^\\n]*';
+        // A marker line right under paragraph text is that paragraph's lazy
+        // text, so it hosts only below a blank or block line, or at the top.
+        var prevOk = '(?=[^\\n])(?<=(?:(?<![\\s\\S])|(?<![^\\n])(?=(?:> ?)*[ \\t]*(?:[\\r\\n]|(?:-{3,}|\\*{3,}|_{3,})[ \\t]*(?=\\r?\\n)|%%|[`~]{3}|(?::{3}|::? )|#{1,6} |\\[[^\\]^\\n]*\\]:(?=\\s)|'
+            + '(?:\\|.*\\||\\{.*\\})(?=[ \\t]*\\r?\\n))|(?:(?:> ?)*\\[\\^|[ \\t]+\\S).*\\n[ \\t]*[-*\\d]).*\\n)'
+            + '(?:[ \\t]*(?:[-*.] |\\w+[.)] ).*\\n(?!:))*)';
+        // n columns of indentation, a tab running to the next multiple of 4.
+        var wsCols = function (n) {
+            return '(?: {4}| {0,3}\\t){' + (n >> 2) + '} {' + (n & 3) + '}';
+        };
+        var at = [];
+        for (var n = 1; n <= 12; n++) {
+            at.push('(?=::)(?<=(?<![^\\n])(?=[^\\n]{0,' + n + '}(?=[^ \\t\\r\\n])(?<=' + prevOk + '(?<![^\\n])' + hostLead + ')[^ \\t\\r\\n])'
+                + '[^\\n]*\\n(?:(?:[ \\t]*\\r?|[ \\t]+[^ \\t\\r\\n][^\\n]*|' + dlHostLazy + ')\\n){0,64}' + wsCols(n) + ')');
+        }
+        // Past column 12 the column is not compared (a branch per column costs
+        // too much): any host above accepts it.
+        at.push('(?=::)(?<=' + prevOk + '(?<![^\\n])' + hostLead + '[^\\n]*\\n(?:(?:[ \\t]*\\r?|[ \\t]+[^ \\t\\r\\n][^\\n]*|' + dlHostLazy + ')\\n){0,64}' + wsCols(12) + '[ \\t]+)');
+        // Past 64 lines with nothing that ends a container the host cannot be
+        // read: accept the term.
+        at.push('(?=::)(?<=(?<![^\\n])(?:(?:[ \\t]*\\r?|[ \\t]+[^ \\t\\r\\n][^\\n]*|' + dlHostLazy + ')\\n){64}[ \\t]+)');
+        // A footnote body holds blocks at any indentation.
+        at.push('(?=::)(?<=(?<![^\\n])\\[\\^[^\\]\\r\\n]+\\]:[^\\n]*\\n(?:(?:[ \\t]*\\r?|[ \\t]+[^ \\t\\r\\n][^\\n]*|%%[^\\n]*)\\n){0,64}(?:  | ?\\t)[ \\t]*)');
+        return '(?:' + at.join('|') + ')';
+    })();
     const DEFINITION_LIST_ENTRY = {
-        begin: /^(?<![^\r\n])(?=(?:(?<![\s\S])\uFEFF)?[ \t]*:: (?![ \t]*$(?![^\r\n])))/,
+        begin: RegExp('^(?<![^\\r\\n])(?=(?:(?<![\\s\\S])\\uFEFF)?(?:[ \\t]+' + TERM_HOSTED + ')?:: (?![ \\t]*$(?![^\\r\\n])))'),
         // Also ends at blank lines followed by a line no entry holds: not a
         // marker, and not indented to the open description's content column,
         // as carve-js reads it. It consumes the blank lines, since highlight.js
         // re-runs an end on the remainder, where a lookbehind sees nothing.
         end: new RegExp('^(?<![^\\r\\n])(?=' + OTHER_BLOCK_OPENER_SOURCE + ')'
-            + '|\\n(?:[ \\t\\r]*\\n)+(?![ \\t]*::? +(?![ \\t]*$(?![^\\r\\n])))(?=([ \\t]*)[^\\s])'),
+            + '|\\n(?:[ \\t\\r]*\\n)+(?![ \\t]*::? +(?![ \\t]*$(?![^\\r\\n])))(?=([ \\t]*)[^\\s])'
+            // An inline rule takes `---` or `{.c}` at the line start first, so the entry ends on the newline before it.
+            + '|\\n(?=(?:-{3,}|\\*{3,}|_{3,}|\\{[^\\n]*\\})[ \\t]*\\r?$(?![^\\r\\n]))'),
+        'on:begin': (match) => {
+            entryColumn = termColumn = indentColumns(/^\uFEFF?([ \t]*)/.exec(match.input.slice(match.index))[1]);
+        },
         'on:end': (match, response) => {
-            if (match[0] !== '' && match[1].length >= descriptionColumn) response.ignoreMatch();
+            if (match[1] !== undefined && match[1].length >= descriptionColumn) response.ignoreMatch();
         },
         relevance: 0,
         // The inline modes are appended once CONTAINS exists.
@@ -2532,7 +2711,17 @@
     INLINE_EXTENSION.contains = LABEL_CONTENT.filter((mode) => mode !== BRACKET_PAIR);
     // A definition term is a one-line inline run like a title.
     DEFINITION_TERM.contains = [ESCAPE, ...ONE_LINE_VERBATIM, RAW_FORMAT, LINE_COMMENT, ...LINE_INLINE];
-    DEFINITION_TERM['on:begin'] = () => {
+    // A term indented into an open description's paragraph is its lazy text,
+    // unless a column-0 comment line right above closed that paragraph.
+    DEFINITION_TERM['on:begin'] = (match) => {
+        const indent = indentColumns(/^\uFEFF?([ \t]*)/.exec(match[0])[1]);
+        if (indent > entryColumn && indent < descriptionColumn
+            && !(match.index > 0 && match.input.startsWith('%%', match.input.lastIndexOf('\n', match.index - 2) + 1))) {
+            match.rule.scope = undefined;
+            return;
+        }
+        match.rule.scope = 'title';
+        termColumn = indent;
         descriptionColumn = Infinity;
     };
     // The content of a quoted heading or caption line: entered right after

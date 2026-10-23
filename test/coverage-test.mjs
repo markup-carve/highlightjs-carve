@@ -151,6 +151,10 @@ check('an unclosed fence ends at its container closer', !paints('::: note\n```\n
 const longFence = highlight('```\n' + 'x'.repeat(33000) + '\n```\n\n*after*\n')
 check('a closed fence over 32 KB ends at its closer', longFence.includes('<span class="hljs-strong">*after*</span>'))
 
+// A `:` below its list's column ends the item and is text (markup-carve/carve#3458).
+check('a description colon below its list is text', highlight('- a\n  :: t\n: d\n').endsWith('\n: d\n') && highlight('- a\n  :: t\n  : d\n').includes('<span class="hljs-punctuation">  :</span> d'))
+check('a quoted definition list scopes its markers', highlight('> :: t\n> : d\n').includes('<span class="hljs-punctuation">:</span> d'))
+
 console.log('')
 assert.strictEqual(failures, 0, failures + ' coverage check(s) failed')
-console.log(Object.keys(CONSTRUCTS).length + Object.keys(NEGATIVES).length + 8 + ' passed')
+console.log(Object.keys(CONSTRUCTS).length + Object.keys(NEGATIVES).length + 10 + ' passed')
