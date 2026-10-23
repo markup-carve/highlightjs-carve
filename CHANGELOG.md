@@ -21,6 +21,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   markup-carve/highlightjs-carve#34
 - A code fence on a list item's marker line is highlighted as a block.
   markup-carve/highlightjs-carve#31
+- Vendor the definition from the released carve-grammars 0.1.18 instead of an
+  unreleased commit. A `:` below its list's column is text
+  (markup-carve/carve#3458), and a quoted definition list scopes its `::` and
+  `:` markers. markup-carve/highlightjs-carve#36
 
 ## [0.1.3] - 2026-10-14
 

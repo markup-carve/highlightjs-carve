@@ -54,7 +54,7 @@ function reportMain(repo) {
     if (process.env.DRIFT_REPORT) {
         appendFileSync(process.env.DRIFT_REPORT, `behind_main=${behind}\nmain=${head}\n`)
     } else if (behind) {
-        console.error(`Pin ${pkg} to github:markup-carve/carve-grammars#${head} and run npm run sync.`)
+        console.error(`${pkg} main (${head}) is ahead of the vendored copy: release carve-grammars, then pin the released version and run npm run sync.`)
         process.exitCode = 1
     }
 }
