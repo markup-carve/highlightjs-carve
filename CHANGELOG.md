@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-10-23
+
+### Added
+
+- `csv` and `tsv` fence bodies highlight their separators, quoted fields and
+  header row. The package now ships `src/languages/delimited.js` (vendored from
+  carve-grammars 0.1.18), the ESM entry exports `csv` and `tsv`, and the
+  classic script registers both against a global `hljs`.
+  markup-carve/highlightjs-carve#37
+
 ## [0.1.4] - 2026-10-23
 
 ### Fixed
