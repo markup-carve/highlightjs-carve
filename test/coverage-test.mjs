@@ -154,7 +154,13 @@ check('a closed fence over 32 KB ends at its closer', longFence.includes('<span 
 // A `:` below its list's column ends the item and is text (markup-carve/carve#3458).
 check('a description colon below its list is text', highlight('- a\n  :: t\n: d\n').endsWith('\n: d\n') && highlight('- a\n  :: t\n  : d\n').includes('<span class="hljs-punctuation">  :</span> d'))
 check('a quoted definition list scopes its markers', highlight('> :: t\n> : d\n').includes('<span class="hljs-punctuation">:</span> d'))
+const lastLine = (source) => highlight(source).split('\n').at(-2)
+const describes = (source) => lastLine(source).startsWith('<span class="hljs-punctuation">')
+check('a footnote body description at its column describes a deeper term', describes('[^1]: x\n    :: t\n  : zq\n'))
+check('a footnote body tab counts from the body column', !describes('[^1]: x\n  \t:: t\n    : zq\n') && describes('[^1]: x\n  \t:: t\n      : zq\n'))
+check('a list marker under a paragraph line hosts no term', !describes(': x\n- z\n  :: t\n  : zq\n') && !describes('  y\n- z\n  :: t\n  : zq\n') && describes('- z\n  :: t\n  : zq\n'))
+check('a list after a leading blank line scopes', (highlight('\n- a\n- b\n').match(/hljs-bullet/g) || []).length === 2)
 
 console.log('')
 assert.strictEqual(failures, 0, failures + ' coverage check(s) failed')
-console.log(Object.keys(CONSTRUCTS).length + Object.keys(NEGATIVES).length + 10 + ' passed')
+console.log(Object.keys(CONSTRUCTS).length + Object.keys(NEGATIVES).length + 15 + ' passed')

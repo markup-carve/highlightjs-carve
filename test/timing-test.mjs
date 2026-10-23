@@ -1,5 +1,5 @@
 /**
- * Unclosed inline delimiters highlight in linear time.
+ * Unclosed inline delimiters and a list after a leading blank line highlight in linear time.
  *
  * highlightjs-carve 0.1.2 vendored a definition that backtracked exponentially
  * on repeated unclosed bare delimiters: 25 copies of `*a ` (75 bytes) did not
@@ -21,6 +21,7 @@ const INPUTS = {
   'unclosed strikethrough': '~a ',
   'unclosed highlight': '=a ',
   'unclosed forced strong and emphasis': '{*a {/b ',
+  'list after a leading blank line': '\n- a',
 }
 
 const worker = `
