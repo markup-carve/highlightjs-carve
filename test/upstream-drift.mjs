@@ -19,7 +19,7 @@ import { execFileSync } from 'node:child_process'
 import { appendFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { render, upstreamVersion } from '../scripts/sync.mjs'
+import { FILES, render, target, upstreamVersion } from '../scripts/sync.mjs'
 
 const pkg = '@markup-carve/carve-grammars'
 const source = 'https://github.com/markup-carve/carve-grammars.git'
@@ -84,13 +84,13 @@ try {
         }
     } else {
         const tarball = run('npm', 'pack', pkg + '@' + latest, '--silent', '--pack-destination', dir)
-        execFileSync('tar', ['-xzf', join(dir, tarball), '-C', dir, 'package/highlightjs/carve.js'])
-        const published = render(readFileSync(join(dir, 'package/highlightjs/carve.js'), 'utf8'), latest)
-        const vendored = readFileSync(new URL('../src/languages/carve.js', import.meta.url), 'utf8')
-        if (vendored === published) {
-            report(0, `  ok vendored definition matches the latest published ${pkg}@${latest}`)
+        execFileSync('tar', ['-xzf', join(dir, tarball), '-C', dir, ...FILES.map((file) => 'package/highlightjs/' + file)])
+        const stale = FILES.filter((file) => readFileSync(target(file), 'utf8')
+            !== render(readFileSync(join(dir, 'package/highlightjs', file), 'utf8'), latest, file))
+        if (stale.length === 0) {
+            report(0, `  ok vendored definitions match the latest published ${pkg}@${latest}`)
         } else {
-            report(1, `src/languages/carve.js (vendored from ${pkg}@${current}) differs from the latest published ${pkg}@${latest}.`)
+            report(1, `src/languages/${stale.join(', ')} (vendored from ${pkg}@${current}) differs from the latest published ${pkg}@${latest}.`)
         }
     }
 } finally {

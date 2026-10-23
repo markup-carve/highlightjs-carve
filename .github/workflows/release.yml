@@ -192,7 +192,7 @@ jobs:
         run: |
           tarball="$(npm pack --silent)"
           listing="$(tar -tzf "$tarball")"
-          for file in index.js languages/carve.js; do
+          for file in index.js languages/carve.js languages/delimited.js; do
             printf '%s\n' "$listing" | grep -qx "package/src/$file" \
               || { echo "::error::$tarball is missing src/$file"; exit 1; }
           done
@@ -331,7 +331,7 @@ jobs:
         run: |
           tarball="$(npm pack --silent)"
           listing="$(tar -tzf "$tarball")"
-          for file in index.js languages/carve.js; do
+          for file in index.js languages/carve.js languages/delimited.js; do
             printf '%s\n' "$listing" | grep -qx "package/src/$file" \
               || { echo "::error::$tarball is missing src/$file"; exit 1; }
           done

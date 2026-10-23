@@ -26,6 +26,6 @@ jobs:
       # The vendored definition is generated. Running the generator and
       # diffing is what stops a stale copy shipping under a fresh version.
       - name: Definition is in sync with the dependency
-        run: npm run sync && git diff --exit-code src/languages/carve.js
+        run: npm run sync && git diff --exit-code src/languages/
 
       - run: npm test
