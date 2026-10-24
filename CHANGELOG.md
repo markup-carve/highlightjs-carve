@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-24
+
+Carve highlighting follows the published 0.1.12 grammar rules.
+
+### Fixes
+
+- Wrapped attributes in definitions and quotes, table spans, and lone continuation markers receive their current scopes.
+
+**Full Changelog**: https://github.com/markup-carve/highlightjs-carve/compare/0.1.6...0.1.7
+
 ## [0.1.6] - 2026-10-23
 
 ### Fixed
