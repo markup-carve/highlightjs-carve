@@ -6,6 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-26
+
+Carve highlighting recognizes the new task states and distinguishes table marker roles.
+
+### Fixes
+
+- Progress `[/]`, blocked `[!]`, and open alias `[_]` task markers receive the full list marker scope (#45).
+
+### Improvements
+
+- Table continuation markers have their own scope, separate from other table operators (#45).
+
+**Full Changelog**: https://github.com/markup-carve/highlightjs-carve/compare/0.1.7...0.1.8
+
 ## [0.1.7] - 2026-10-24
 
 Carve highlighting follows the published 0.1.12 grammar rules.
