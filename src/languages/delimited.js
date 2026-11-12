@@ -3,8 +3,8 @@
 // Vendored verbatim from @markup-carve/carve-grammars (unreleased source)
 // (highlightjs/delimited.js) by scripts/sync.mjs. Edit the definition there,
 // release carve-grammars, then run: npm run sync
-// Source revision: 114de39cd967b631de2ea6d75ef088cc750bff51
-// Upstream package version: 0.1.22
+// Source revision: b4f8c2858c638f82f5b8798b4d9e99bc13f6c275
+// Upstream package version: 0.1.23
 (function (root, factory) {
     var delimited = factory();
     if (typeof module === 'object' && module.exports) module.exports = delimited;

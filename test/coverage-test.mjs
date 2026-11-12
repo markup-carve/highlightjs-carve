@@ -143,9 +143,9 @@ check('an {empty} footnote body is an attribute', highlight('[^n]: {empty}\n').i
 // carve 0.1.11 renders an unclosed fence as code to the end of the document...
 const unclosed = highlight('```\ncode *a*\nmore')
 check('an unclosed fence runs to the end as code', unclosed.startsWith('<span class="hljs-code">') && !unclosed.includes('hljs-strong') && unclosed.endsWith('more</span>'))
-// ...or to its container's closer: the paragraph after the aside is inline again.
+// ...also inside a container: the host's `:::` is payload (PART 0 S1), so the text after it stays code.
 const contained = highlight('::: note\n```\ncode *x*\n:::\n\nafter *b*\n')
-check('an unclosed fence ends at its container closer', !paints('::: note\n```\ncode *x*\n:::\n\nafter *b*\n', 'after') && contained.includes('<span class="hljs-strong">*b*</span>') && !contained.includes('<span class="hljs-strong">*x*</span>'))
+check('an unclosed fence in a container runs past its closer', contained.includes('<span class="hljs-code"><span class="hljs-keyword">```</span>\ncode *x*\n:::\n\nafter *b*\n</span>') && !contained.includes('hljs-strong'))
 // A closed fence past the paired rules' lookahead is still closed, not unclosed:
 // carve 0.1.11 renders the text after its closer as a paragraph with <strong>.
 const longFence = highlight('```\n' + 'x'.repeat(33000) + '\n```\n\n*after*\n')
@@ -157,8 +157,9 @@ check('a quoted definition list scopes its markers', highlight('> :: t\n> : d\n'
 const lastLine = (source) => highlight(source).split('\n').at(-2)
 const describes = (source) => lastLine(source).startsWith('<span class="hljs-punctuation">')
 check('a footnote body description at its column describes a deeper term', describes('[^1]: x\n    :: t\n  : zq\n'))
-check('a footnote body tab counts from the body column', !describes('[^1]: x\n  \t:: t\n    : zq\n') && describes('[^1]: x\n  \t:: t\n      : zq\n'))
-check('a list marker under a paragraph line hosts no term', !describes(': x\n- z\n  :: t\n  : zq\n') && !describes('  y\n- z\n  :: t\n  : zq\n') && describes('- z\n  :: t\n  : zq\n'))
+check('a footnote body tab counts from the body column', describes('[^1]: x\n  \t:: t\n    : zq\n') && describes('[^1]: x\n  \t:: t\n      : zq\n'))
+// An indented `::` term opens a list without a host, so a list marker under a paragraph line does not matter.
+check('a term under a paragraph line opens its own list', describes(': x\n- z\n  :: t\n  : zq\n') && !highlight(': x\n- z\n  :: t\n  : zq\n').includes('hljs-bullet') && describes('  y\n- z\n  :: t\n  : zq\n') && describes('- z\n  :: t\n  : zq\n'))
 check('a list after a leading blank line scopes', (highlight('\n- a\n- b\n').match(/hljs-bullet/g) || []).length === 2)
 
 console.log('')
