@@ -8,13 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.1.9] - 2026-11-12
 
-Carve highlighting follows the Carve 0.1.14 readings vendored from carve-grammars.
+Carve highlighting follows the Carve 0.1.14 readings vendored from the published carve-grammars 0.1.24.
 
 ### Fixes
 
 - A lone CR ends a line like LF and CRLF (#48).
 - Captions scope as `title.caption` with a `punctuation.caption-marker` marker, so stock themes keep coloring them (#48).
 - The grammar is vendored from carve-grammars main instead of an unmerged branch, with its later highlight.js fixes: a fence in a list item, quote or note ends with its container, a glued attribute block scopes on a quoted line and stays text after a delimiter that closes nothing, and a list marker under a `: x` paragraph line is no longer a bullet (#53).
+- Paths and snake_case words such as `/usr/local/` and `_my_var_` are no longer emphasis, and a block glued to a heading's inline span (`# *a b*{.q}`) scopes as attributes; the grammar now comes from the published carve-grammars 0.1.24 (#54).
 
 ### Improvements
 
