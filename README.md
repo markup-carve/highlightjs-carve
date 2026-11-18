@@ -37,6 +37,19 @@ hljs.registerLanguage('tsv', tsv)
 const { value } = hljs.highlight(source, { language: 'carve' })
 ```
 
+For Carve 0.2 documents, register the separate `carve2` definition:
+
+```js
+import hljs from 'highlight.js'
+import { carve2 } from 'highlightjs-carve'
+
+hljs.registerLanguage('carve2', carve2)
+const { value } = hljs.highlight(source, { language: 'carve2' })
+```
+
+The 0.2 definition comes from the pinned carve-grammars source revision. The
+existing `carve` entry continues to use the vendored 0.1 grammar.
+
 `csv` and `tsv` highlight the body of a `csv` or `tsv` fence: separators,
 quoted fields and the header row. highlight.js ships no language under those
 names, so without them such a fence body stays plain.
