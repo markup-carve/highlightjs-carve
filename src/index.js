@@ -19,6 +19,7 @@
  */
 import './languages/carve.js'
 import './languages/delimited.js'
+export { default as carve2 } from './languages/carve2.mjs'
 
 /** @type {(hljs?: object) => object} */
 const carve = globalThis.carveHljs
