@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict'
 import hljs from 'highlight.js'
-import carve, { carve2 } from '../src/index.js'
+import carve from '../src/index.js'
 
 hljs.registerLanguage('carve', carve)
-hljs.registerLanguage('carve2', carve2)
 
 // Each source is an upgrade or clause case in the 0.2 grammar inventory.
 // Old spellings are intentional negative cases.
@@ -37,7 +36,7 @@ const cases = [
 ]
 
 for (const [id, input, required, absent] of cases) {
-    const output = hljs.highlight(input, { language: 'carve2' }).value
+    const output = hljs.highlight(input, { language: 'carve' }).value
     const scopes = new Set([...output.matchAll(/class="([^"]+)"/g)].flatMap(match => match[1].split(' ')))
     for (const scope of required) {
         assert.ok(scopes.has(`hljs-${scope}`) || scopes.has(scope), `${id}: missing ${scope}: ${output}`)
@@ -55,9 +54,8 @@ for (const [input, scope] of [
     ['{~strike~}', 'deletion'],
     ['{=mark=}', 'addition'],
 ]) {
-    assert.ok(hljs.highlight(input, { language: 'carve2' }).value.includes(`hljs-${scope}`))
+    assert.ok(hljs.highlight(input, { language: 'carve' }).value.includes(`hljs-${scope}`))
 }
-assert.ok(hljs.highlight('~~~js\nx\n~~~\n', { language: 'carve' }).value.includes('hljs-code'))
-assert.ok(!hljs.highlight('~~~js\nx\n~~~\n', { language: 'carve2' }).value.includes('hljs-code'))
+assert.ok(!hljs.highlight('~~~js\nx\n~~~\n', { language: 'carve' }).value.includes('hljs-code'))
 
-console.log(`${cases.length} Carve 0.2 inventory cases and 7 version checks passed`)
+console.log(`${cases.length} Carve 0.2 inventory cases and 6 retained-form checks passed`)
