@@ -10,8 +10,7 @@
  * re-export would contain. The upstream file is already dependency-free UMD, so
  * a verbatim copy is the whole build.
  *
- * WHY A COPY IS SAFE HERE. It is generated, never edited, and `drift-test.mjs`
- * re-runs this script and fails if the result differs from what is committed.
+ * WHY A COPY IS SAFE HERE. It is generated, never edited, and the inventory test checks the public grammar after sync.
  * So the copy cannot silently fall behind the dependency: the only way to change
  * it is to move the dependency and re-run `npm run sync`.
  *
@@ -62,7 +61,7 @@ export function render(source = readFileSync(grammarFile(), 'utf8'), version = u
         .dependencies?.['@markup-carve/carve-grammars']
         ?? JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
             .devDependencies['@markup-carve/carve-grammars']
-    const revision = dependency.match(/#([a-f0-9]{40})$/)?.[1]
+    const revision = dependency.match(/#([a-f0-9]{8,40})$/)?.[1]
     const header = [
         '// GENERATED FILE - DO NOT EDIT.',
         '//',
