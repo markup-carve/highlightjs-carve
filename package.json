@@ -52,6 +52,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@markup-carve/carve-grammars": "github:markup-carve/carve-grammars#6621ad19"
+    "@markup-carve/carve-grammars": "github:markup-carve/carve-grammars#ab7e7f71"
   }
 }
