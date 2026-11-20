@@ -10,4 +10,4 @@ hljs.registerLanguage('carve', carve)
 const { value } = hljs.highlight(source, { language: 'carve' })
 ```
 
-The root entry and `carve.mjs` expose the 0.2 definition. The `carve.js` UMD entry supports classic scripts. Register the package's `csv` and `tsv` exports to color delimited fence bodies. The grammar is pinned to carve-grammars `ff1d0f0d`.
+The root entry and `carve.mjs` expose the 0.2 definition. The `carve.js` UMD entry supports classic scripts. Register the package's `csv` and `tsv` exports to color delimited fence bodies. The grammar is pinned to carve-grammars `79511c4b`.
