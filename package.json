@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.js",
     "./carve.js": "./src/languages/carve.js",
+    "./carve.mjs": "./src/languages/carve.mjs",
     "./delimited.js": "./src/languages/delimited.js",
     "./package.json": "./package.json"
   },
@@ -18,8 +19,7 @@
   ],
   "scripts": {
     "sync": "node scripts/sync.mjs",
-    "drift:upstream": "node test/upstream-drift.mjs",
-    "test": "node test/registration-test.mjs && node test/drift-test.mjs && node test/coverage-test.mjs && node test/heading-caption-test.mjs && node test/task-states-test.mjs && node test/line-ends-test.mjs && node test/wave-rulings-test.mjs && node test/timing-test.mjs"
+    "test": "node test/carve-inventory.mjs && node test/pin-drift.mjs"
   },
   "keywords": [
     "carve",
@@ -46,10 +46,12 @@
     "highlight.js": "^11"
   },
   "devDependencies": {
-    "@markup-carve/carve-grammars": "^0.1.24",
     "highlight.js": "^11.11.1"
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "@markup-carve/carve-grammars": "github:markup-carve/carve-grammars#31215996"
   }
 }

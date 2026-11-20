@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Breaking
+
+- Replace the 0.1 `carve` grammar with the 0.2 grammar, remove `carve2` and its tests, and pin carve-grammars `ff1d0f0d`.
+
 ## [0.1.9] - 2026-11-12
 
 Carve highlighting follows the Carve 0.1.14 readings vendored from the published carve-grammars 0.1.24.
