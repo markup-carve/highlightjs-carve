@@ -3,7 +3,7 @@
 // Vendored verbatim from @markup-carve/carve-grammars (unreleased source)
 // (highlightjs/carve.js) by scripts/sync.mjs. Edit the definition there,
 // release carve-grammars, then run: npm run sync
-// Source revision: 79511c4b
+// Source revision: 6621ad19
 // Upstream package version: 0.1.24
 /** Carve 0.2 highlight.js grammar. */
 
