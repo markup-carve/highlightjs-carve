@@ -33,6 +33,17 @@ const cases = [
     ['CC-112', 'a\n%% #region x\nb', ['comment'], []],
     ['CC-893', '|=< a |\n', ['table-header'], ['table-alignment']],
     ['CC-894', '|={<} a |\n', ['table-header', 'table-alignment'], []],
+    // Snippets (C2-B-236, C2-I-128, C2-B-237): a use is no include path.
+    ['C2-B-236', '{$ver}: 0.2.3\n', ['punctuation', 'variable'], ['meta', 'string']],
+    ['C2-I-128', 'Release {{ $ver }} of the tool.\n', ['template-variable', 'variable'], ['meta', 'string']],
+    ['C2-B-237', '{{ $ver }}\n\nText with *strong*.\n', ['template-variable', 'variable', 'strong'], ['meta', 'string']],
+    ['C2-B-201', '{{ path/a.crv }}\n', ['meta', 'string'], ['template-variable', 'variable']],
+    ['C2-B-201-quoted', '{{ "a $ver.crv" }}\n', ['meta', 'string'], ['template-variable', 'variable']],
+    ['C2-B-236-div', '::: note\n{$x}: y\n:::\n', ['keyword'], ['variable']],
+    ['C2-I-128-escaped', 'a \\{{ $ver }} b\n', [], ['template-variable', 'variable', 'meta']],
+    // A block use takes no attribute line (C2-B-096, carve#6896).
+    ['C2-B-096', '{.x}\n{{ $name }}\n', ['template-variable'], ['attr']],
+    ['C2-B-096-inline', '{.x}\n{{ $name }} tail\n', ['attr', 'template-variable'], []],
 ]
 
 for (const [id, input, required, absent] of cases) {
