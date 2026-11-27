@@ -6,9 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-27
+
+Carve highlighting follows Carve 0.2. This release drops the Carve 0.1 grammar.
+
 ### Breaking
 
-- Replace the 0.1 `carve` grammar with the 0.2 grammar, remove `carve2` and its tests, and pin carve-grammars `ff1d0f0d`.
+- The `carve` language, the root entry, `carve.mjs` and the `carve.js` UMD file now highlight Carve 0.2 source; the Carve 0.1 grammar is removed (#57).
+
+**Full Changelog**: https://github.com/markup-carve/highlightjs-carve/compare/0.1.9...0.2.0
 
 ## [0.1.9] - 2026-11-12
 
